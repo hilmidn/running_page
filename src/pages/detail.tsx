@@ -7,6 +7,7 @@ import DetailActivity from '@/components/Detail/Activity';
 import ElevationChart from '@/components/Detail/ElevationChart';
 import PaceChart from '@/components/Detail/PaceChart';
 import CadenceChart from '@/components/Detail/CadenceChart';
+import PaceZoneChart from '@/components/Detail/PaceZone';
 import RouteMap from '@/components/Detail/RouteMap';
 import SplitsTable from '@/components/Detail/SplitsTable';
 import type { ActivityStream } from '@/utils/activityAnalytics';
@@ -119,10 +120,14 @@ export default function DetailPage() {
           </section>
         </div>
 
-        {/* Right Column — Cadence + Extra */}
+        {/* Right Column — Cadence + Pace Zone + Extra */}
         <div className="space-y-4">
           <section id="cadence-chart">
             <CadenceChart stream={stream} />
+          </section>
+
+          <section id="pace-zone-chart">
+            <PaceZoneChart stream={stream} />
           </section>
         </div>
       </div>
