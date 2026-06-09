@@ -87,6 +87,20 @@ export interface CadenceZoneData {
     color: string;
 }
 
+export interface PaceZoneData {
+    zone: string; // "Z1", "Z2", etc
+    paceRange: string; // "7:30-8:30/km"
+    minPace: number; // sec/km
+    maxPace: number; // sec/km
+    timeSeconds: number;
+    timeFormatted: string;
+    percentage: number;
+    avgPaceInZone: number;
+    formattedAvgPace: string;
+    label: string;
+    color: string;
+}
+
 export interface ElevationProfilePoint {
     distance: number;
     distanceKm: number;
@@ -429,6 +443,145 @@ export function createCadenceZoneData(
             color,
         };
     });
+
+    return zoneData;
+}
+
+// ============== PACE ZONES ==============
+
+/**
+ * Calculate instantaneous pace (sec/km) between consecutive data points
+ */
+function calculateInstantPace(
+    stream: ActivityStream,
+): { pace: number; valid: boolean }[] {
+    const paces: { pace: number; valid: boolean }[] = [];
+
+    for (let i = 0; i < stream.time.length; i++) {
+        if (i === 0) {
+            paces.push({ pace: 0, valid: false });
+            continue;
+        }
+
+        const distDelta = (stream.distance[i] || 0) - (stream.distance[i - 1] || 0);
+        const timeDelta = (stream.time[i] || 0) - (stream.time[i - 1] || 0);
+
+        if (distDelta > 0 && timeDelta > 0) {
+            const pace = calculatePace(distDelta, timeDelta);
+            if (isFinite(pace) && pace > 0) {
+                paces.push({ pace, valid: true });
+                continue;
+            }
+        }
+        paces.push({ pace: 0, valid: false });
+    }
+
+    return paces;
+}
+
+/**
+ * Create pace zone distribution based on activity average pace
+ * Strava-like zones: calculated relative to the activity's overall avg pace
+ *
+ * Z1 Recovery  → > 110% of avg pace (slowest)
+ * Z2 Aerobic   → 103–110%
+ * Z3 Tempo     → 97–103%  (around average)
+ * Z4 Threshold → 90–97%
+ * Z5 VO2 Max   → < 90% of avg pace (fastest)
+ */
+export function createPaceZoneData(
+    stream: ActivityStream,
+    totalTimeSeconds: number,
+): PaceZoneData[] {
+    if (stream.distance.length === 0 || totalTimeSeconds === 0) return [];
+
+    const paces = calculateInstantPace(stream);
+    const validPaces = paces.filter(p => p.valid).map(p => p.pace);
+
+    if (validPaces.length === 0) return [];
+
+    const avgPace = validPaces.reduce((a, b) => a + b, 0) / validPaces.length;
+
+    const zones = [
+        {
+            zone: 'Z1',
+            label: 'Recovery',
+            minFactor: 1.10,
+            maxFactor: Infinity,
+            color: '#10b981',
+        },
+        {
+            zone: 'Z2',
+            label: 'Aerobic',
+            minFactor: 1.03,
+            maxFactor: 1.10,
+            color: '#3b82f6',
+        },
+        {
+            zone: 'Z3',
+            label: 'Tempo',
+            minFactor: 0.97,
+            maxFactor: 1.03,
+            color: '#f59e0b',
+        },
+        {
+            zone: 'Z4',
+            label: 'Threshold',
+            minFactor: 0.90,
+            maxFactor: 0.97,
+            color: '#f97316',
+        },
+        {
+            zone: 'Z5',
+            label: 'VO₂ Max',
+            minFactor: 0,
+            maxFactor: 0.90,
+            color: '#ef4444',
+        },
+    ];
+
+    const zoneData: PaceZoneData[] = zones.map(
+        ({ zone, label, minFactor, maxFactor, color }) => {
+            let timeInZone = 0;
+            let paceSum = 0;
+            let count = 0;
+            let minPaceInZone = Infinity;
+            let maxPaceInZone = 0;
+
+            for (let i = 0; i < paces.length; i++) {
+                if (!paces[i].valid) continue;
+                const pace = paces[i].pace;
+
+                // Lower sec/km = faster. Z1 is slowest (highest sec/km)
+                if (pace > avgPace * minFactor && pace <= avgPace * maxFactor) {
+                    timeInZone += 1;
+                    paceSum += pace;
+                    count++;
+                    if (pace < minPaceInZone) minPaceInZone = pace;
+                    if (pace > maxPaceInZone) maxPaceInZone = pace;
+                }
+            }
+
+            const percentage = (timeInZone / totalTimeSeconds) * 100;
+            const avgPaceInZoneValue = count > 0 ? paceSum / count : 0;
+            const cappedMin = minPaceInZone === Infinity ? avgPace * minFactor : minPaceInZone;
+            const cappedMax = maxPaceInZone === 0 ? (maxFactor === Infinity ? avgPace * 1.3 : avgPace * maxFactor) : maxPaceInZone;
+
+            return {
+                zone,
+                label,
+                paceRange: `${formatPace(cappedMax)}–${formatPace(cappedMin)}/km`,
+                minPace: cappedMin,
+                maxPace: cappedMax,
+                timeSeconds: timeInZone,
+                timeFormatted: secondsToTimeString(timeInZone),
+                percentage: Math.round(percentage * 10) / 10,
+                avgPaceInZone: Math.round(avgPaceInZoneValue),
+                formattedAvgPace: formatPace(avgPaceInZoneValue),
+                color,
+            };
+        },
+    );
 
     return zoneData;
 }
