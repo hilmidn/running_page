@@ -11,75 +11,120 @@ import {
   ComposedChart,
 } from 'recharts';
 import {
-  ChartPoint,
-  formatData,
+  ActivityStream,
+  formatStreamData,
+  secondsToTimeString,
   formatPace,
-  formatTime,
-  Streams,
-} from '../utlis';
+  getHRZone,
+} from '@/utils/activityAnalytics';
 import HRZoneStats from './HRZoneStats';
 
 interface Props {
-  streams: Streams;
-  umur: number;
+  stream: ActivityStream;
+  maxHR?: number;
 }
 
-export default function HeartRateChart({ streams, umur }: Props) {
-  const data: ChartPoint[] = useMemo(() => {
-    return formatData(streams);
-  }, [streams]);
+interface ZoneStat {
+  zone: number;
+  label: string;
+  color: string;
+  duration: number;
+  percent: number;
+}
 
-  const userMaxHR = 220 - umur;
-  const zones = [
-    {
-      min: 0.5 * userMaxHR,
-      max: 0.6 * userMaxHR,
-      label: 'Z1 Recovery',
-      color: '#4caf50',
-    },
-    {
-      min: 0.6 * userMaxHR,
-      max: 0.7 * userMaxHR,
-      label: 'Z2 Endurance',
-      color: '#ffeb3b',
-    },
-    {
-      min: 0.7 * userMaxHR,
-      max: 0.8 * userMaxHR,
-      label: 'Z3 Aerobic Base',
-      color: '#ff9800',
-    },
-    {
-      min: 0.8 * userMaxHR,
-      max: 0.9 * userMaxHR,
-      label: 'Z4 Hard Tempo',
-      color: '#f44336',
-    },
-    {
-      min: 0.9 * userMaxHR,
-      max: 1.1 * userMaxHR,
-      label: 'Z5 VO2 Max',
-      color: '#9c27b0',
-    },
-  ];
+export default function HeartRateChart({ stream, maxHR = 180 }: Props) {
+  const data = useMemo(() => {
+    if (!stream || !stream.time) return [];
+    return formatStreamData(stream);
+  }, [stream]);
+
+  const zones: ZoneStat[] = useMemo(() => {
+    return [
+      {
+        zone: 1,
+        label: 'Z1 Recovery',
+        color: '#10b981',
+        duration: 0,
+        percent: 0,
+      },
+      {
+        zone: 2,
+        label: 'Z2 Endurance',
+        color: '#3b82f6',
+        duration: 0,
+        percent: 0,
+      },
+      {
+        zone: 3,
+        label: 'Z3 Aerobic Base',
+        color: '#f59e0b',
+        duration: 0,
+        percent: 0,
+      },
+      {
+        zone: 4,
+        label: 'Z4 Hard Tempo',
+        color: '#f97316',
+        duration: 0,
+        percent: 0,
+      },
+      {
+        zone: 5,
+        label: 'Z5 VO2 Max',
+        color: '#ef4444',
+        duration: 0,
+        percent: 0,
+      },
+    ];
+  }, []);
 
   const zoneStats = useMemo(() => {
-    const stats = zones.map((z) => ({ ...z, duration: 0 }));
-    data.forEach((p, i) => {
-      const dt = i < data.length - 1 ? data[i + 1].t - p.t : 1;
-      const z = stats.find((z) => p.hr >= z.min && p.hr < z.max);
-      if (z) z.duration += dt;
+    if (!data || data.length === 0 || !stream.heartrate) return zones;
+
+    const stats = [...zones];
+
+    stream.heartrate.forEach((hr) => {
+      if (hr === null) return;
+
+      const zoneNumber = getHRZone((hr / maxHR) * 100);
+      const stat = stats.find((s) => s.zone === zoneNumber);
+      if (stat) {
+        stat.duration += 1; // 1 second per data point
+      }
     });
-    const total = stats.reduce((sum, z) => sum + z.duration, 0);
-    return stats.map((z) => ({
-      ...z,
-      percent: total ? (z.duration / total) * 100 : 0,
+
+    const totalDuration = stats.reduce((sum, s) => sum + s.duration, 0);
+    return stats.map((s) => ({
+      ...s,
+      percent: totalDuration > 0 ? (s.duration / totalDuration) * 100 : 0,
     }));
-  }, [data, zones]);
+  }, [data, stream, maxHR, zones]);
+
+  // Loading skeleton
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded-xl bg-gray-800/30 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="h-5 w-5 animate-pulse rounded bg-gray-700" />
+          <div className="h-4 w-32 animate-pulse rounded bg-gray-700" />
+        </div>
+        <div className="h-80 animate-pulse rounded-lg bg-gray-700/40" />
+        <div className="mt-4 space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="h-2 w-full animate-pulse rounded-full bg-gray-700" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: 16, borderRadius: 12 }}>
-      <h2>Heart Rate</h2>
+    <div className="rounded-xl bg-gray-800/30 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-gray-200">Heart Rate</h2>
+      </div>
 
       <ResponsiveContainer width="100%" height={350}>
         <ComposedChart
@@ -98,25 +143,52 @@ export default function HeartRateChart({ streams, umur }: Props) {
             </linearGradient>
           </defs>
 
-          {/* HR Zones */}
-          {zones.map((z, i) => (
-            <ReferenceArea
-              key={i}
-              y1={z.min}
-              y2={z.max}
-              fill={z.color}
-              fillOpacity={0.5}
-            />
-          ))}
+          {/* HR Zones - using new zone ranges */}
+          <ReferenceArea
+            y1={maxHR * 0.5}
+            y2={maxHR * 0.6}
+            fill="#10b981"
+            fillOpacity={0.15}
+          />
+          <ReferenceArea
+            y1={maxHR * 0.6}
+            y2={maxHR * 0.7}
+            fill="#3b82f6"
+            fillOpacity={0.15}
+          />
+          <ReferenceArea
+            y1={maxHR * 0.7}
+            y2={maxHR * 0.8}
+            fill="#f59e0b"
+            fillOpacity={0.15}
+          />
+          <ReferenceArea
+            y1={maxHR * 0.8}
+            y2={maxHR * 0.9}
+            fill="#f97316"
+            fillOpacity={0.15}
+          />
+          <ReferenceArea
+            y1={maxHR * 0.9}
+            y2={maxHR * 1.1}
+            fill="#ef4444"
+            fillOpacity={0.15}
+          />
 
           <XAxis
-            dataKey="t"
+            dataKey="time"
             type="number"
             domain={['dataMin', 'dataMax']}
             interval="preserveStartEnd"
-            tickFormatter={(sec) => formatTime(sec)}
+            tickFormatter={(sec) => secondsToTimeString(sec)}
+            stroke="#6b7280"
+            tick={{ fontSize: 10 }}
           />
-          <YAxis domain={['dataMin - 10', 'dataMax + 10']} />
+          <YAxis
+            domain={['dataMin - 10', 'dataMax + 10']}
+            stroke="#6b7280"
+            tick={{ fontSize: 10 }}
+          />
           <Tooltip content={<CustomTooltip />} />
 
           {/* Area shading only */}
@@ -126,6 +198,7 @@ export default function HeartRateChart({ streams, umur }: Props) {
             fill="url(#areaFill)"
             stroke="none"
             dot={false}
+            isAnimationActive={false}
           />
 
           {/* Bold HR line */}
@@ -138,7 +211,7 @@ export default function HeartRateChart({ streams, umur }: Props) {
             isAnimationActive={false}
           />
 
-          <Brush dataKey="t" height={20} />
+          <Brush dataKey="time" height={20} />
         </ComposedChart>
       </ResponsiveContainer>
 
@@ -153,20 +226,12 @@ function CustomTooltip({ active, payload }: any) {
   const d = payload[0].payload;
 
   return (
-    <div
-      style={{
-        background: '#222',
-        color: '#fff',
-        padding: '8px 12px',
-        borderRadius: 6,
-        fontSize: 12,
-      }}
-    >
-      <div>Time: {formatTime(d.t)}</div>
+    <div className="rounded-lg bg-gray-900/95 px-3 py-2 text-xs text-white shadow-lg backdrop-blur-sm">
+      <div>Time: {secondsToTimeString(d.time)}</div>
       <div>HR: {d.hr ?? '—'} bpm</div>
-      <div>Pace: {formatPace(d.pace)}</div>
-      <div>Altitude: {d.alt ?? '—'} m</div>
-      <div>Cadence: {d.cadence ?? '—'} spm</div>
+      {d.pace !== undefined && <div>Pace: {formatPace(d.pace)}</div>}
+      {d.altitude !== undefined && <div>Altitude: {d.altitude ?? '—'} m</div>}
+      {d.cadence !== undefined && <div>Cadence: {d.cadence ?? '—'} spm</div>}
     </div>
   );
 }

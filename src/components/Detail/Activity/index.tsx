@@ -1,10 +1,33 @@
 import useActivities from '@/hooks/useActivities';
-import { Activity, calculateCalories, formatPace, titleForRun } from '@/utils/utils';
+import {
+  Activity,
+  calculateCalories,
+  formatPace,
+  titleForRun,
+} from '@/utils/utils';
 import { useEffect, useMemo, useState } from 'react';
-import { Flame, Heart, Clock, Mountain, Footprints, Gauge } from 'lucide-react';
+import {
+  Flame,
+  Heart,
+  Clock,
+  Mountain,
+  Footprints,
+  Gauge,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
 import StravaGenerateLayout from '@/components/Layout/StravaGenerateLayout';
+import {
+  validateStreamData,
+  type ActivityStream,
+} from '@/utils/activityAnalytics';
 
-const DetailActivity = ({ id }: { id: number | null | undefined }) => {
+interface DetailActivityProps {
+  id: number | null | undefined;
+  stream?: ActivityStream;
+}
+
+const DetailActivity = ({ id, stream }: DetailActivityProps) => {
   const { activities } = useActivities();
 
   const activity = useMemo<Activity | undefined>(() => {
@@ -12,6 +35,20 @@ const DetailActivity = ({ id }: { id: number | null | undefined }) => {
   }, [activities, id]);
 
   const [umur, setUmur] = useState(0);
+
+  // Validate stream data completeness
+  const dataValidation = useMemo(() => {
+    if (!stream) {
+      return {
+        hasHR: false,
+        hasAltitude: false,
+        hasCadence: false,
+        hasGPS: false,
+        dataPoints: 0,
+      };
+    }
+    return validateStreamData(stream);
+  }, [stream]);
 
   useEffect(() => {
     const tanggalLahir = new Date('1997-01-01');
@@ -57,10 +94,77 @@ const DetailActivity = ({ id }: { id: number | null | undefined }) => {
           : 'bg-green-500';
 
   return (
-    <div className="mx-auto max-w-md space-y-4 rounded-2xl bg-gradient-to-b from-gray-900 to-gray-800 p-6 text-white shadow-lg">
-      <h2 className="mb-2 text-center text-xl font-bold">
+    <div className="bg-linear-to-b mx-auto max-w-md space-y-4 rounded-2xl from-gray-900 to-gray-800 p-6 text-white shadow-lg">
+      <h2 className="mb-4 text-center text-xl font-bold">
         {titleForRun(activity) || 'Detail Aktivitas'}
       </h2>
+
+      {/* Data Completeness Badges */}
+      <div className="flex flex-wrap justify-center gap-2">
+        {/* HR Badge */}
+        <div
+          className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+            dataValidation.hasHR
+              ? 'bg-green-500/20 text-green-400'
+              : 'bg-gray-600/30 text-gray-400'
+          }`}
+        >
+          {dataValidation.hasHR ? (
+            <CheckCircle2 size={14} />
+          ) : (
+            <AlertCircle size={14} />
+          )}
+          HR
+        </div>
+
+        {/* GPS Badge */}
+        <div
+          className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+            dataValidation.hasGPS
+              ? 'bg-green-500/20 text-green-400'
+              : 'bg-gray-600/30 text-gray-400'
+          }`}
+        >
+          {dataValidation.hasGPS ? (
+            <CheckCircle2 size={14} />
+          ) : (
+            <AlertCircle size={14} />
+          )}
+          GPS
+        </div>
+
+        {/* Altitude Badge */}
+        <div
+          className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+            dataValidation.hasAltitude
+              ? 'bg-green-500/20 text-green-400'
+              : 'bg-gray-600/30 text-gray-400'
+          }`}
+        >
+          {dataValidation.hasAltitude ? (
+            <CheckCircle2 size={14} />
+          ) : (
+            <AlertCircle size={14} />
+          )}
+          Altitude
+        </div>
+
+        {/* Cadence Badge */}
+        <div
+          className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+            dataValidation.hasCadence
+              ? 'bg-green-500/20 text-green-400'
+              : 'bg-gray-600/30 text-gray-400'
+          }`}
+        >
+          {dataValidation.hasCadence ? (
+            <CheckCircle2 size={14} />
+          ) : (
+            <AlertCircle size={14} />
+          )}
+          Cadence
+        </div>
+      </div>
 
       {/* Main Stats Grid */}
       <div className="grid grid-cols-2 gap-4 text-center">
