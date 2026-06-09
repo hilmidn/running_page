@@ -451,10 +451,12 @@ export function createCadenceZoneData(
 
 /**
  * Calculate instantaneous pace (sec/km) between consecutive data points
+ * Filters out GPS noise and standing-still data (pace > 10:00/km)
  */
 function calculateInstantPace(
     stream: ActivityStream,
 ): { pace: number; valid: boolean }[] {
+    const MAX_REASONABLE_PACE = 600; // 10:00/km — above this = GPS noise / stopped
     const paces: { pace: number; valid: boolean }[] = [];
 
     for (let i = 0; i < stream.time.length; i++) {
@@ -468,7 +470,7 @@ function calculateInstantPace(
 
         if (distDelta > 0 && timeDelta > 0) {
             const pace = calculatePace(distDelta, timeDelta);
-            if (isFinite(pace) && pace > 0) {
+            if (isFinite(pace) && pace > 0 && pace < MAX_REASONABLE_PACE) {
                 paces.push({ pace, valid: true });
                 continue;
             }
