@@ -42,7 +42,7 @@ export default function HeartRateChart({ stream, maxHR = 180 }: Props) {
       { zone: 1, label: 'Z1 Recovery', color: '#10b981', duration: 0, percent: 0 },
       { zone: 2, label: 'Z2 Endurance', color: '#3b82f6', duration: 0, percent: 0 },
       { zone: 3, label: 'Z3 Aerobic', color: '#f59e0b', duration: 0, percent: 0 },
-      { zone: 4, label: 'Z4 Tempo', color: '#f97316', duration: 0, percent: 0 },
+      { zone: 4, label: 'Z4 Threshold', color: '#f97316', duration: 0, percent: 0 },
       { zone: 5, label: 'Z5 VO2 Max', color: '#ef4444', duration: 0, percent: 0 },
     ],
     [],
@@ -115,12 +115,12 @@ export default function HeartRateChart({ stream, maxHR = 180 }: Props) {
           data={data}
           margin={{ top: 5, right: 10, left: -10, bottom: 5 }}
         >
-          {/* Zone reference bands */}
-          <ReferenceArea y1={0} y2={maxHR * 0.6} fill="#10b981" fillOpacity={0.06} />
-          <ReferenceArea y1={maxHR * 0.6} y2={maxHR * 0.7} fill="#3b82f6" fillOpacity={0.06} />
-          <ReferenceArea y1={maxHR * 0.7} y2={maxHR * 0.8} fill="#f59e0b" fillOpacity={0.06} />
-          <ReferenceArea y1={maxHR * 0.8} y2={maxHR * 0.9} fill="#f97316" fillOpacity={0.06} />
-          <ReferenceArea y1={maxHR * 0.9} y2={maxHR * 1.1} fill="#ef4444" fillOpacity={0.06} />
+          {/* Zone reference bands — Strava-like thresholds */}
+          <ReferenceArea y1={0} y2={maxHR * 0.65} fill="#10b981" fillOpacity={0.06} />
+          <ReferenceArea y1={maxHR * 0.65} y2={maxHR * 0.82} fill="#3b82f6" fillOpacity={0.06} />
+          <ReferenceArea y1={maxHR * 0.82} y2={maxHR * 0.89} fill="#f59e0b" fillOpacity={0.06} />
+          <ReferenceArea y1={maxHR * 0.89} y2={maxHR * 0.97} fill="#f97316" fillOpacity={0.06} />
+          <ReferenceArea y1={maxHR * 0.97} y2={maxHR * 1.1} fill="#ef4444" fillOpacity={0.06} />
 
           <XAxis
             dataKey="time"
