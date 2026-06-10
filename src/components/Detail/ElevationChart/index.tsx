@@ -88,7 +88,7 @@ export default function ElevationChart({ stream, compact }: Props) {
   // Loading skeleton
   if (!stream.altitude) {
     return (
-      <div className="rounded-xl bg-gray-800/30 p-4">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-5 w-5 animate-pulse rounded bg-gray-700" />
@@ -110,7 +110,7 @@ export default function ElevationChart({ stream, compact }: Props) {
 
   if (!hasAltitude || elevationData.length === 0) {
     return (
-      <div className="rounded-xl bg-gray-800/40 p-6 text-center">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg text-center">
         <Mountain className="mx-auto mb-2 text-gray-500" size={32} />
         <p className="text-sm text-gray-400">Elevation data unavailable</p>
       </div>
@@ -118,8 +118,8 @@ export default function ElevationChart({ stream, compact }: Props) {
   }
 
   return (
-    <div className="rounded-xl bg-gray-800/30 p-4">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Mountain className="text-amber-400" size={18} />
           <h3 className="text-sm font-semibold text-gray-200">Elevation</h3>
