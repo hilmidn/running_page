@@ -11,7 +11,14 @@ interface Props {
   stream: ActivityStream;
 }
 
-type SortKey = 'index' | 'distanceKm' | 'durationSec' | 'avgPace' | 'avgHR' | 'elevationGain' | 'avgCadence';
+type SortKey =
+  | 'index'
+  | 'distanceKm'
+  | 'durationSec'
+  | 'avgPace'
+  | 'avgHR'
+  | 'elevationGain'
+  | 'avgCadence';
 
 interface SortState {
   key: SortKey;
@@ -43,10 +50,15 @@ const columns: { key: SortKey; label: string; mobile: boolean }[] = [
 ];
 
 export default function SplitsTable({ stream }: Props) {
-  const segments = useMemo(() => splitActivityByDistance(stream, 1000), [stream]);
+  const segments = useMemo(
+    () => splitActivityByDistance(stream, 1000),
+    [stream]
+  );
 
   const avgPace = useMemo(() => {
-    const paces = segments.map((s) => s.avgPace).filter((p) => p > 0 && isFinite(p));
+    const paces = segments
+      .map((s) => s.avgPace)
+      .filter((p) => p > 0 && isFinite(p));
     return paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 0;
   }, [segments]);
 
@@ -73,28 +85,39 @@ export default function SplitsTable({ stream }: Props) {
   };
 
   const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
-    if (sort?.key !== columnKey) return <ArrowUpDown size={12} className="inline text-gray-600" />;
-    return sort.direction === 'asc'
-      ? <ArrowUp size={12} className="inline text-amber-400" />
-      : <ArrowDown size={12} className="inline text-amber-400" />;
+    if (sort?.key !== columnKey)
+      return <ArrowUpDown size={12} className="inline text-gray-600" />;
+    return sort.direction === 'asc' ? (
+      <ArrowUp size={12} className="inline text-amber-400" />
+    ) : (
+      <ArrowDown size={12} className="inline text-amber-400" />
+    );
   };
 
   const summary = useMemo(() => {
     if (segments.length === 0) return null;
     const totalDist = segments.reduce((s, seg) => s + seg.distanceKm, 0);
     const totalTime = segments.reduce((s, seg) => s + seg.durationSec, 0);
-    const avgHrArr = segments.map((s) => s.avgHR).filter((h) => h != null) as number[];
-    const avgHr = avgHrArr.length ? Math.round(avgHrArr.reduce((a, b) => a + b, 0) / avgHrArr.length) : null;
+    const avgHrArr = segments
+      .map((s) => s.avgHR)
+      .filter((h) => h != null) as number[];
+    const avgHr = avgHrArr.length
+      ? Math.round(avgHrArr.reduce((a, b) => a + b, 0) / avgHrArr.length)
+      : null;
     const totalElev = segments.reduce((s, seg) => s + seg.elevationGain, 0);
-    const cadArr = segments.map((s) => s.avgCadence).filter((c) => c != null) as number[];
-    const avgCad = cadArr.length ? Math.round(cadArr.reduce((a, b) => a + b, 0) / cadArr.length) : null;
+    const cadArr = segments
+      .map((s) => s.avgCadence)
+      .filter((c) => c != null) as number[];
+    const avgCad = cadArr.length
+      ? Math.round(cadArr.reduce((a, b) => a + b, 0) / cadArr.length)
+      : null;
     const totalPace = totalTime / totalDist;
     return { totalDist, totalTime, totalPace, avgHr, totalElev, avgCad };
   }, [segments]);
 
   if (segments.length === 0) {
     return (
-      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg text-center">
+      <div className="bg-linear-to-b space-y-4 rounded-2xl from-gray-900 to-gray-800 p-6 text-center text-white shadow-lg">
         <Table className="mx-auto mb-2 text-gray-500" size={32} />
         <p className="text-sm text-gray-400">No split data available</p>
       </div>
@@ -102,11 +125,13 @@ export default function SplitsTable({ stream }: Props) {
   }
 
   return (
-    <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
+    <div className="bg-linear-to-b space-y-4 rounded-2xl from-gray-900 to-gray-800 p-6 text-white shadow-lg">
       <div className="mb-3 flex items-center gap-2">
         <List className="text-blue-400" size={18} />
         <h3 className="text-sm font-semibold text-gray-200">Splits</h3>
-        <span className="ml-auto text-xs text-gray-500">{segments.length} segments</span>
+        <span className="ml-auto text-xs text-gray-500">
+          {segments.length} segments
+        </span>
       </div>
 
       <div className="overflow-x-auto">
@@ -117,12 +142,11 @@ export default function SplitsTable({ stream }: Props) {
                 <th
                   key={col.key}
                   className={`cursor-pointer select-none px-2 py-2 text-left font-medium hover:text-gray-200 ${
-                    !col.mobile ? 'hidden sm:table-cell' : ''
+                    !col.mobile ? '' : ''
                   }`}
                   onClick={() => toggleSort(col.key)}
                 >
-                  {col.label}{' '}
-                  <SortIcon columnKey={col.key} />
+                  {col.label} <SortIcon columnKey={col.key} />
                 </th>
               ))}
             </tr>
@@ -137,23 +161,25 @@ export default function SplitsTable({ stream }: Props) {
                     : ''
                 }`}
               >
-                <td className="px-2 py-2 font-mono text-gray-300">{seg.index + 1}</td>
+                <td className="px-2 py-2 font-mono text-gray-300">
+                  {seg.index + 1}
+                </td>
                 <td className="px-2 py-2 font-mono text-gray-300">
                   {seg.distanceKm.toFixed(2)}
                 </td>
-                <td className="hidden px-2 py-2 font-mono text-gray-300 sm:table-cell">
+                <td className="px-2 py-2 font-mono text-gray-300">
                   {seg.durationFormatted}
                 </td>
                 <td className="px-2 py-2 font-mono text-gray-300">
                   {seg.paceFormatted}
                 </td>
-                <td className="hidden px-2 py-2 font-mono text-gray-300 sm:table-cell">
+                <td className="px-2 py-2 font-mono text-gray-300">
                   {seg.avgHR ?? '—'}
                 </td>
-                <td className="hidden px-2 py-2 font-mono text-gray-300 sm:table-cell">
+                <td className="px-2 py-2 font-mono text-gray-300">
                   <span className="text-green-400">+{seg.elevationGain}</span>
                 </td>
-                <td className="hidden px-2 py-2 font-mono text-gray-300 sm:table-cell">
+                <td className="px-2 py-2 font-mono text-gray-300">
                   {seg.avgCadence ?? '—'}
                 </td>
               </tr>
@@ -162,21 +188,23 @@ export default function SplitsTable({ stream }: Props) {
           {summary && (
             <tfoot>
               <tr className="border-t border-gray-600 font-semibold text-gray-200">
-                <td className="px-2 py-2" colSpan={1}>Total</td>
-                <td className="px-2 py-2 font-mono">{summary.totalDist.toFixed(2)}</td>
-                <td className="hidden px-2 py-2 font-mono sm:table-cell">
+                <td className="px-2 py-2" colSpan={1}>
+                  Total
+                </td>
+                <td className="px-2 py-2 font-mono">
+                  {summary.totalDist.toFixed(2)}
+                </td>
+                <td className="px-2 py-2 font-mono">
                   {secondsToTimeString(summary.totalTime)}
                 </td>
-                <td className="px-2 py-2 font-mono">{formatPace(summary.totalPace)}</td>
-                <td className="hidden px-2 py-2 font-mono sm:table-cell">
-                  {summary.avgHr ?? '—'}
+                <td className="px-2 py-2 font-mono">
+                  {formatPace(summary.totalPace)}
                 </td>
-                <td className="hidden px-2 py-2 font-mono text-green-400 sm:table-cell">
+                <td className="px-2 py-2 font-mono">{summary.avgHr ?? '—'}</td>
+                <td className="px-2 py-2 font-mono text-green-400">
                   +{summary.totalElev}
                 </td>
-                <td className="hidden px-2 py-2 font-mono sm:table-cell">
-                  {summary.avgCad ?? '—'}
-                </td>
+                <td className="px-2 py-2 font-mono">{summary.avgCad ?? '—'}</td>
               </tr>
             </tfoot>
           )}
