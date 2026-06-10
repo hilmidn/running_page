@@ -72,13 +72,13 @@ export default function HeartRateChart({ stream, maxHR = 180 }: Props) {
   // Loading skeleton
   if (!stream.heartrate) {
     return (
-      <div className="rounded-xl bg-gray-800/30 p-4">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
         <div className="mb-3 flex items-center gap-2">
           <div className="h-5 w-5 animate-pulse rounded bg-gray-700" />
           <div className="h-4 w-24 animate-pulse rounded bg-gray-700" />
         </div>
         <div className="h-[250px] animate-pulse rounded-lg bg-gray-700/40" />
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="flex items-center gap-2">
               <div className="h-2 w-full animate-pulse rounded-full bg-gray-700" />
@@ -91,7 +91,7 @@ export default function HeartRateChart({ stream, maxHR = 180 }: Props) {
 
   if (!hasHR || data.length === 0) {
     return (
-      <div className="rounded-xl bg-gray-800/40 p-6 text-center">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg text-center">
         <Heart className="mx-auto mb-2 text-gray-500" size={32} />
         <p className="text-sm text-gray-400">No heart rate data available</p>
       </div>
@@ -104,8 +104,8 @@ export default function HeartRateChart({ stream, maxHR = 180 }: Props) {
   const maxHRrounded = Math.ceil(Math.max(...hrValues) / 10) * 10 + 10;
 
   return (
-    <div className="rounded-xl bg-gray-800/30 p-4">
-      <div className="mb-3 flex items-center gap-2">
+    <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
+      <div className="flex items-center gap-2">
         <Heart className="text-red-400" size={18} />
         <h3 className="text-sm font-semibold text-gray-200">Heart Rate</h3>
       </div>

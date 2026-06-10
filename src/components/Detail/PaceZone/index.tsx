@@ -50,7 +50,7 @@ export default function PaceZoneChart({ stream, compact }: Props) {
   // Loading skeleton
   if (!hasData) {
     return (
-      <div className="rounded-xl bg-gray-800/30 p-4">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
         <div className="mb-3 flex items-center gap-2">
           <div className="h-5 w-5 animate-pulse rounded bg-gray-700" />
           <div className="h-4 w-32 animate-pulse rounded bg-gray-700" />
@@ -59,7 +59,7 @@ export default function PaceZoneChart({ stream, compact }: Props) {
           style={{ height: chartHeight }}
           className="animate-pulse rounded-lg bg-gray-700/40"
         />
-        <div className="mt-3 space-y-2">
+        <div className="space-y-2">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="flex items-center justify-between gap-2">
               <div className="h-3 w-20 animate-pulse rounded bg-gray-700" />
@@ -73,7 +73,7 @@ export default function PaceZoneChart({ stream, compact }: Props) {
 
   if (!hasZones) {
     return (
-      <div className="rounded-xl bg-gray-800/40 p-6 text-center">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg text-center">
         <Gauge className="mx-auto mb-2 text-gray-500" size={32} />
         <p className="text-sm text-gray-400">No pace zone data available</p>
       </div>
@@ -81,8 +81,8 @@ export default function PaceZoneChart({ stream, compact }: Props) {
   }
 
   return (
-    <div className="rounded-xl bg-gray-800/30 p-4">
-      <div className="mb-3 flex items-center gap-2">
+    <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
+      <div className="flex items-center gap-2">
         <Gauge className="text-cyan-400" size={18} />
         <h3 className="text-sm font-semibold text-gray-200">Pace Zones</h3>
       </div>

@@ -74,7 +74,7 @@ export default function PaceChart({ stream, compact }: Props) {
   // Loading skeleton
   if (!hasPaceData) {
     return (
-      <div className="rounded-xl bg-gray-800/30 p-4">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-5 w-5 animate-pulse rounded bg-gray-700" />
@@ -96,7 +96,7 @@ export default function PaceChart({ stream, compact }: Props) {
 
   if (chartData.length === 0) {
     return (
-      <div className="rounded-xl bg-gray-800/40 p-6 text-center">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg text-center">
         <Gauge className="mx-auto mb-2 text-gray-500" size={32} />
         <p className="text-sm text-gray-400">Insufficient pace data</p>
       </div>
@@ -119,8 +119,8 @@ export default function PaceChart({ stream, compact }: Props) {
   );
 
   return (
-    <div className="rounded-xl bg-gray-800/30 p-4">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Gauge className="text-cyan-400" size={18} />
           <h3 className="text-sm font-semibold text-gray-200">Pace Splits</h3>
