@@ -208,10 +208,10 @@ const DetailActivity = ({ id, stream }: DetailActivityProps) => {
           </div>
           <span className="font-semibold">{calories.effortLabel}</span>
         </div>
-        {/* <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <span>HR Max</span>
           <span className="font-semibold">{calories.hrMax} bpm</span>
-        </div> */}
+        </div>
         <div className="flex items-center justify-between">
           <span>HR Percent</span>
           <span className="font-semibold">

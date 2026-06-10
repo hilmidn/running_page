@@ -97,7 +97,7 @@ export default function DetailPage() {
           <DetailActivity id={id ? parseInt(id) : null} stream={stream} />
 
           <section id="route-map">
-            <RouteMap activity={activity} />
+            <RouteMap activity={activity} stream={stream} />
           </section>
 
           <section id="splits-table">

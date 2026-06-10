@@ -28,6 +28,7 @@ export interface ActivityStream {
     altitude?: (number | null)[];
     cadence?: (number | null)[];
     time: number[];
+    latlng: [number, number][];
 }
 
 export interface StreamDataValidation {

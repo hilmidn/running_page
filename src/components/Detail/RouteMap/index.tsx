@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import Map, { Marker, Source, Layer, NavigationControl } from 'react-map-gl';
 import { MapPin, Flag } from 'lucide-react';
 import type { Activity } from '@/utils/utils';
+import type { ActivityStream } from '@/utils/activityAnalytics';
 import { decodePolyline } from '@/utils/activityAnalytics';
 import { MAPBOX_TOKEN } from '@/utils/const';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface Props {
   activity?: Activity;
+  stream?: ActivityStream;
   compact?: boolean;
 }
 
@@ -49,15 +51,21 @@ function calculateBounds(coords: [number, number][]) {
   };
 }
 
-export default function RouteMap({ activity, compact }: Props) {
+export default function RouteMap({ activity, stream, compact }: Props) {
   const polyline = activity?.summary_polyline;
+  const rawLatLng = stream?.latlng;
 
-  const routeCoords = useMemo(() => {
+  const routeCoords = useMemo((): [number, number][] => {
+    if (rawLatLng && rawLatLng.length > 0) {
+      return rawLatLng
+        .map(([lat, lng]) => [lng, lat] as [number, number])
+        .filter(([lng, lat]) => isValidCoord(lng, lat));
+    }
     if (!polyline) return [];
     return decodePolyline(polyline)
       .map((p) => [p.lng, p.lat] as [number, number])
       .filter(([lng, lat]) => isValidCoord(lng, lat));
-  }, [polyline]);
+  }, [rawLatLng, polyline]);
 
   const initialView = useMemo(() => {
     if (routeCoords.length === 0) return null;
@@ -70,7 +78,7 @@ export default function RouteMap({ activity, compact }: Props) {
     zoom: 10,
   });
 
-  const hasGPS = !!polyline && routeCoords.length > 1;
+  const hasGPS = routeCoords.length > 1;
 
   const geojson = useMemo(() => {
     if (!hasGPS) return null;
