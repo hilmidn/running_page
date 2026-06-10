@@ -35,7 +35,7 @@ export default function HRZoneStats({ zoneStats }: Props) {
       case 'Z1 Recovery':   return 'Easy / Recovery';
       case 'Z2 Endurance':  return 'Endurance / Base';
       case 'Z3 Aerobic':    return 'Solid Aerobic';
-      case 'Z4 Tempo':      return 'Hard Tempo';
+      case 'Z4 Threshold':    return 'Lactate Threshold';
       case 'Z5 VO2 Max':    return 'All-out / VO2 Max';
       default:              return '';
     }

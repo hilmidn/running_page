@@ -195,12 +195,18 @@ export function calculateGrade(elevationGain: number, distanceMeters: number): n
 
 /**
  * Get HR zone (1-5) based on HR percentage of max
+ * Strava-like thresholds for running:
+ * Z1 Recovery   → < 65%
+ * Z2 Endurance  → 65–82%
+ * Z3 Aerobic    → 82–89%
+ * Z4 Threshold  → 89–97%
+ * Z5 VO2 Max    → ≥ 97%
  */
 export function getHRZone(hrPercent: number): number {
-    if (hrPercent < 60) return 1; // Z1: Recovery
-    if (hrPercent < 70) return 2; // Z2: Endurance
-    if (hrPercent < 80) return 3; // Z3: Aerobic
-    if (hrPercent < 90) return 4; // Z4: Tempo
+    if (hrPercent < 65) return 1; // Z1: Recovery
+    if (hrPercent < 82) return 2; // Z2: Endurance
+    if (hrPercent < 89) return 3; // Z3: Aerobic
+    if (hrPercent < 97) return 4; // Z4: Threshold
     return 5; // Z5: VO2 Max
 }
 
