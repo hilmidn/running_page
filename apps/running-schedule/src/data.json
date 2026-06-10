@@ -1,0 +1,720 @@
+{
+  "title": "Program Half Marathon + 5K Sub-30",
+  "athlete": "Wey Oh",
+  "start_date": "2026-06-08",
+  "total_weeks": 12,
+  "phases": [
+    {
+      "name": "FASE 1: BASE BUILDING",
+      "weeks": [
+        1,
+        4
+      ]
+    },
+    {
+      "name": "FASE 2: VOLUME BUILD",
+      "weeks": [
+        5,
+        8
+      ]
+    },
+    {
+      "name": "FASE 3: HM SPECIFIC",
+      "weeks": [
+        9,
+        12
+      ]
+    }
+  ],
+  "weeks": [
+    {
+      "week": 1,
+      "phase": "FASE 1: BASE BUILDING",
+      "total": "24km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength full ringan",
+          "detail": "Sesuai tabel strength minggu 1-2"
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo A konservatif",
+          "detail": "10' pemanasan → **20' lari continuous @ HR 158-163** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 5km",
+          "detail": "Lari 5km @ HR 145-155 (Z2). Pace bebas."
+        },
+        {
+          "day": "Kamis",
+          "emoji": "🧘",
+          "type": "mobility",
+          "label": "Mobility + Core ringan",
+          "detail": "10-15 menit: squat 1×10, lunge 1×8/kaki, wall/knee push up 1×8, plank 1×15-20dtk, stretching"
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": "Lari 6km @ HR 145-155 (Z2)"
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "🛌",
+          "type": "rest",
+          "label": "Rest",
+          "detail": "Stretching ringan aja"
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 8km",
+          "detail": "Lari 8km @ HR 145-155. Jaga pace stabil dari awal."
+        }
+      ],
+      "notes": "**Tempo A** — ini latihan kunci. Minggu 1-2 jangan start terlalu cepat. Cari pace di 2-3 menit pertama sampai HR masuk **158-163** dulu, bukan langsung ke 165+. Patokan HR, bukan pace. Tempo harus berat tapi terkendali, bukan survival mode."
+    },
+    {
+      "week": 2,
+      "phase": "FASE 1: BASE BUILDING",
+      "total": "26km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength full ringan",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo A konservatif:",
+          "detail": "10' pemanasan → **22' @ HR 158-163** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 5km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "🧘",
+          "type": "mobility",
+          "label": "Mobility + Core ringan",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 9km",
+          "detail": "@ HR 145-155"
+        }
+      ]
+    },
+    {
+      "week": 3,
+      "phase": "FASE 1: BASE BUILDING",
+      "total": "28km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo A:",
+          "detail": "10' pemanasan → **25' @ HR 160-165** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 10km",
+          "detail": "@ HR 145-155"
+        }
+      ]
+    },
+    {
+      "week": 4,
+      "phase": "FASE 1: BASE BUILDING",
+      "total": "30km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo B:",
+          "detail": "10' pemanasan → **2 x 12' @ HR 160-165 (rec: jog 3')** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 7km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 11km",
+          "detail": "@ HR 145-155"
+        }
+      ],
+      "notes": "**Tempo B** — ini circuit tempo: lari 12 menit di HR 160-165, lalu jog/jalan 3 menit buat recovery (HR turun ke 130), lalu lari lagi 12 menit. Ini metode buat accumulate more tempo time tanpa over-stress."
+    },
+    {
+      "week": 5,
+      "phase": "FASE 2: VOLUME BUILD",
+      "total": "32km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength (minggu 5-12)",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo B:",
+          "detail": "10' pemanasan → **2 x 15' @ HR 160-165 (rec: jog 3')** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 7km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 12km",
+          "detail": "@ HR 145-155"
+        }
+      ]
+    },
+    {
+      "week": 6,
+      "phase": "FASE 2: VOLUME BUILD",
+      "total": "34km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo A:",
+          "detail": "10' pemanasan → **25' @ HR 160-165** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 7km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 13km",
+          "detail": "@ HR 145-155"
+        }
+      ]
+    },
+    {
+      "week": 7,
+      "phase": "FASE 2: VOLUME BUILD",
+      "total": "36km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo B:",
+          "detail": "10' pemanasan → **2 x 15' @ HR 162-167 (rec: jog 3')** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 7km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 7km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 14km",
+          "detail": "@ HR 145-155"
+        }
+      ]
+    },
+    {
+      "week": 8,
+      "phase": "FASE 2: VOLUME BUILD",
+      "total": "27km",
+      "subtext": "Minggu 8 — Total: ~27km (Cutback Week)",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength (ringan, 2 set aja)",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo mini:",
+          "detail": "5' pemanasan → **15' @ HR 160** → 5' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 5km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength (ringan, 2 set)",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 5km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 10km",
+          "detail": "@ HR 145-150 (pelan aja)"
+        }
+      ],
+      "notes": "**Cutback Week** penting. Tubuh lu adaptasi di minggu ini, bukan di minggu latihan berat. Jangan ngeyel latihan full — trust the process."
+    },
+    {
+      "week": 9,
+      "phase": "FASE 3: HM SPECIFIC",
+      "total": "34km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo C:",
+          "detail": "10' pemanasan → **20' @ HR 165-170 (ini HM effort!)** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 7km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 15km",
+          "detail": "@ HR 145-155 (boleh 5km terakhir naik natural ke 155-160)"
+        }
+      ],
+      "notes": "**Tempo C** — HR lebih tinggi (165-170) = mendekati race effort. Pace perkiraan 5:30-5:45/km. Kalau HR di 165-170 tapi masih nyaman napasnya, berarti pace udah di track buat HM."
+    },
+    {
+      "week": 10,
+      "phase": "FASE 3: HM SPECIFIC",
+      "total": "36km",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Tempo B:",
+          "detail": "10' pemanasan → **2 x 12' @ HR 163-168 (rec: jog 2')** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 6km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 7km",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 16km",
+          "detail": "@ HR 145-155 (opsional 17km kalau minggu 9 terasa aman, last 5km @ 155-160)"
+        }
+      ]
+    },
+    {
+      "week": 11,
+      "phase": "FASE 3: HM SPECIFIC",
+      "total": "28km",
+      "subtext": "Minggu 11 — Total: ~28km (Taper Week)",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength (ringan, 2 set)",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Progressive Tempo ringan:",
+          "detail": "10' pemanasan → 10'@ HR155 → 10'@ HR162 → **10'@ HR166-168 max** → 10' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 5km",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "🛌",
+          "type": "rest",
+          "label": "Rest total",
+          "detail": ""
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 5km (santai, HR 140-150)",
+          "detail": ""
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "",
+          "type": "other",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Long 12km",
+          "detail": "@ HR 145-150 (pelan!)"
+        }
+      ],
+      "notes": "**Taper:** Rasa gatal mau lari kenceng itu normal. Tahan. Energi disimpen buat race."
+    },
+    {
+      "week": 12,
+      "phase": "FASE 3: HM SPECIFIC",
+      "total": "",
+      "subtext": "",
+      "days": [
+        {
+          "day": "Senin",
+          "emoji": "💪",
+          "type": "strength",
+          "label": "Strength (2 set ringan)",
+          "detail": ""
+        },
+        {
+          "day": "Selasa",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Shake out:",
+          "detail": "5' pemanasan → **15' @ HR 155** (santai) → 5' pendinginan"
+        },
+        {
+          "day": "Rabu",
+          "emoji": "🛌",
+          "type": "rest",
+          "label": "Rest",
+          "detail": ""
+        },
+        {
+          "day": "Kamis",
+          "emoji": "🏃",
+          "type": "run",
+          "label": "Easy 3km",
+          "detail": "(super pelan, lepas kaki)"
+        },
+        {
+          "day": "Jumat",
+          "emoji": "🛌",
+          "type": "rest",
+          "label": "Rest",
+          "detail": "— carb loading mulai"
+        },
+        {
+          "day": "Sabtu",
+          "emoji": "🛌",
+          "type": "rest",
+          "label": "Rest",
+          "detail": "— stretching ringan + cek gear"
+        },
+        {
+          "day": "Minggu",
+          "emoji": "🔥",
+          "type": "race",
+          "label": "HALF MARATHON",
+          "detail": ""
+        }
+      ]
+    }
+  ]
+}
