@@ -488,14 +488,18 @@ function calculateInstantPace(
 }
 
 /**
- * Create pace zone distribution based on activity average pace
- * Strava-like zones: calculated relative to the activity's overall avg pace
+ * Create pace zone distribution using Strava-style absolute pace thresholds
+ * Based on the user's Strava pace zones derived from CP/fitness level
  *
- * Z1 Recovery  → > 110% of avg pace (slowest)
- * Z2 Aerobic   → 103–110%
- * Z3 Tempo     → 97–103%  (around average)
- * Z4 Threshold → 90–97%
- * Z5 VO2 Max   → < 90% of avg pace (fastest)
+ * All thresholds in seconds per kilometre.
+ * Lower sec/km = faster pace, higher sec/km = slower pace.
+ *
+ * Z1 Recovery   → ≥ 10:12/km (> 612 sec/km, slowest)
+ * Z2 Aerobic    → 8:46–10:12/km (526–612)
+ * Z3 Tempo      → 7:53–8:46/km  (473–526)
+ * Z4 Threshold  → 7:22–7:53/km  (442–473)
+ * Z5 VO₂ Max    → 6:56–7:22/km  (416–442)
+ * Z6 Anaerobic  → < 6:56/km     (< 416 sec/km, fastest)
  */
 export function createPaceZoneData(
     stream: ActivityStream,
@@ -508,48 +512,54 @@ export function createPaceZoneData(
 
     if (validPaces.length === 0) return [];
 
-    const avgPace = validPaces.reduce((a, b) => a + b, 0) / validPaces.length;
-
+    // Absolute pace thresholds (sec/km) matching Strava's running zones for this athlete
     const zones = [
         {
             zone: 'Z1',
             label: 'Recovery',
-            minFactor: 1.10,
-            maxFactor: Infinity,
+            minThreshold: 612, // ≥ 10:12/km (slowest)
+            maxThreshold: Infinity,
             color: '#10b981',
         },
         {
             zone: 'Z2',
             label: 'Aerobic',
-            minFactor: 1.03,
-            maxFactor: 1.10,
+            minThreshold: 526, // 8:46/km
+            maxThreshold: 612, // 10:12/km
             color: '#3b82f6',
         },
         {
             zone: 'Z3',
             label: 'Tempo',
-            minFactor: 0.97,
-            maxFactor: 1.03,
+            minThreshold: 473, // 7:53/km
+            maxThreshold: 526, // 8:46/km
             color: '#f59e0b',
         },
         {
             zone: 'Z4',
             label: 'Threshold',
-            minFactor: 0.90,
-            maxFactor: 0.97,
+            minThreshold: 442, // 7:22/km
+            maxThreshold: 473, // 7:53/km
             color: '#f97316',
         },
         {
             zone: 'Z5',
             label: 'VO₂ Max',
-            minFactor: 0,
-            maxFactor: 0.90,
+            minThreshold: 416, // 6:56/km
+            maxThreshold: 442, // 7:22/km
             color: '#ef4444',
+        },
+        {
+            zone: 'Z6',
+            label: 'Sprint',
+            minThreshold: 0,   // fastest
+            maxThreshold: 416, // 6:56/km
+            color: '#dc2626',
         },
     ];
 
     const zoneData: PaceZoneData[] = zones.map(
-        ({ zone, label, minFactor, maxFactor, color }) => {
+        ({ zone, label, minThreshold, maxThreshold, color }) => {
             let timeInZone = 0;
             let paceSum = 0;
             let count = 0;
@@ -560,8 +570,8 @@ export function createPaceZoneData(
                 if (!paces[i].valid) continue;
                 const pace = paces[i].pace;
 
-                // Lower sec/km = faster. Z1 is slowest (highest sec/km)
-                if (pace > avgPace * minFactor && pace <= avgPace * maxFactor) {
+                // Lower sec/km = faster. Z1 is slowest (highest sec/km), Z6 is fastest
+                if (pace >= minThreshold && pace < maxThreshold) {
                     timeInZone += 1;
                     paceSum += pace;
                     count++;
@@ -572,8 +582,10 @@ export function createPaceZoneData(
 
             const percentage = (timeInZone / totalTimeSeconds) * 100;
             const avgPaceInZoneValue = count > 0 ? paceSum / count : 0;
-            const cappedMin = minPaceInZone === Infinity ? avgPace * minFactor : minPaceInZone;
-            const cappedMax = maxPaceInZone === 0 ? (maxFactor === Infinity ? avgPace * 1.3 : avgPace * maxFactor) : maxPaceInZone;
+            const cappedMin = minPaceInZone === Infinity ? minThreshold : minPaceInZone;
+            const cappedMax = maxPaceInZone === 0
+                ? (maxThreshold === Infinity ? minThreshold + 60 : maxThreshold)
+                : maxPaceInZone;
 
             return {
                 zone,
