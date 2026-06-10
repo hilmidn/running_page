@@ -99,7 +99,7 @@ export default function RouteMap({ activity, compact }: Props) {
 
   if (!hasGPS) {
     return (
-      <div className="rounded-xl bg-gray-800/40 p-6 text-center">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg text-center">
         <MapPin className="mx-auto mb-2 text-gray-500" size={32} />
         <p className="text-sm text-gray-400">No GPS data available</p>
       </div>
@@ -109,7 +109,7 @@ export default function RouteMap({ activity, compact }: Props) {
   const mapHeight = compact ? 250 : 350;
 
   return (
-    <div className="overflow-hidden rounded-xl bg-gray-800/30">
+    <div className="bg-linear-to-b from-gray-900 to-gray-800 overflow-hidden rounded-2xl shadow-lg">
       <Map
         {...viewState}
         onMove={(evt) => setViewState(evt.viewState)}
