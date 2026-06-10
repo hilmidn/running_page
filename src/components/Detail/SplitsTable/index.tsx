@@ -94,7 +94,7 @@ export default function SplitsTable({ stream }: Props) {
 
   if (segments.length === 0) {
     return (
-      <div className="rounded-xl bg-gray-800/40 p-6 text-center">
+      <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg text-center">
         <Table className="mx-auto mb-2 text-gray-500" size={32} />
         <p className="text-sm text-gray-400">No split data available</p>
       </div>
@@ -102,7 +102,7 @@ export default function SplitsTable({ stream }: Props) {
   }
 
   return (
-    <div className="rounded-xl bg-gray-800/30 p-4">
+    <div className="bg-linear-to-b from-gray-900 to-gray-800 space-y-4 rounded-2xl p-6 text-white shadow-lg">
       <div className="mb-3 flex items-center gap-2">
         <List className="text-blue-400" size={18} />
         <h3 className="text-sm font-semibold text-gray-200">Splits</h3>
