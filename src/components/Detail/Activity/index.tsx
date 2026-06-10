@@ -75,6 +75,13 @@ const DetailActivity = ({ id, stream }: DetailActivityProps) => {
     );
   }, [activity, umur]);
 
+  // Actual max HR from stream data, fallback to estimated
+  const actualMaxHR = useMemo(() => {
+    if (!stream?.heartrate) return calories.hrMax;
+    const valid = stream.heartrate.filter((h): h is number => h !== null && h > 0);
+    return valid.length > 0 ? Math.max(...valid) : calories.hrMax;
+  }, [stream, calories.hrMax]);
+
   const distanceKm = activity ? (activity.distance ?? 0) / 1000 : 0;
   const avgHR = activity?.average_heartrate?.toFixed(0) ?? '-';
   const elevation = activity?.elevation_gain?.toFixed(0) ?? '0';
@@ -210,7 +217,7 @@ const DetailActivity = ({ id, stream }: DetailActivityProps) => {
         </div>
         <div className="flex items-center justify-between">
           <span>HR Max</span>
-          <span className="font-semibold">{calories.hrMax} bpm</span>
+          <span className="font-semibold">{actualMaxHR} bpm</span>
         </div>
         <div className="flex items-center justify-between">
           <span>HR Percent</span>
