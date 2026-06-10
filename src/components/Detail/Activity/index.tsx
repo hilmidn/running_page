@@ -83,15 +83,17 @@ const DetailActivity = ({ id, stream }: DetailActivityProps) => {
     : '-';
   const movingTime = activity?.moving_time ?? '-';
 
-  // Effort color logic (Coros-style)
+  // Effort color logic (aligned with Strava-like HR zones)
   const effortColor =
-    calories.hrPercent > 90
-      ? 'bg-red-500'
-      : calories.hrPercent > 80
-        ? 'bg-orange-500'
-        : calories.hrPercent > 70
-          ? 'bg-yellow-500'
-          : 'bg-green-500';
+    calories.hrPercent > 97
+      ? 'bg-red-600'
+      : calories.hrPercent > 89
+        ? 'bg-red-500'
+        : calories.hrPercent > 82
+          ? 'bg-orange-500'
+          : calories.hrPercent > 65
+            ? 'bg-yellow-500'
+            : 'bg-green-500';
 
   return (
     <div className="bg-linear-to-b mx-auto max-w-md space-y-4 rounded-2xl from-gray-900 to-gray-800 p-6 text-white shadow-lg">

@@ -566,17 +566,20 @@ function calculateCalories(
   let kcal;
   let effortLabel;
 
-  // Hybrid blending berdasarkan HR zone
-  if (hrPercent < 75) {
+  // Hybrid blending berdasarkan HR zone (aligned with Strava-like thresholds)
+  if (hrPercent < 65) {
     kcal = distanceKcal;
     effortLabel = 'Easy';
-  } else if (hrPercent < 85) {
-    const t = (hrPercent - 75) / 10; // 0–1 antara 75–85%
+  } else if (hrPercent < 82) {
+    const t = (hrPercent - 65) / 17; // 0–1 antara 65–82%
     kcal = distanceKcal * (1 - t) + keytelKcal * t;
     effortLabel = 'Moderate';
-  } else if (hrPercent < 90) {
+  } else if (hrPercent < 89) {
     kcal = keytelKcal;
     effortLabel = 'Hard';
+  } else if (hrPercent < 97) {
+    kcal = keytelKcal;
+    effortLabel = 'Very Hard';
   } else {
     kcal = keytelKcal * 1.1; // tambahan kecil untuk zona maksimal
     effortLabel = 'Max Effort';
