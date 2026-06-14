@@ -24,6 +24,10 @@ const data: ISiteMetadataResult = {
       name: 'Summary',
       url: `${getBasePath()}/summary`,
     },
+    {
+      name: 'Trends',
+      url: `${getBasePath()}/trends`,
+    },
   ],
 };
 
