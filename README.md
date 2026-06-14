@@ -223,12 +223,18 @@ Open your browser and visit localhost:80
 ### Modifying Mapbox token
 
 > If you use English please change `IS_CHINESE = false` in `src/utils/const.ts` <br>
-> Suggested changes to your own [Mapbox token](https://www.mapbox.com/)
+> Set your own [Mapbox token](https://www.mapbox.com/) via the `VITE_MAPBOX_TOKEN` env var.
 
-```typescript
-const MAPBOX_TOKEN =
-  'pk.eyJ1IjoieWlob25nMDYxOCIsImEiOiJja2J3M28xbG4wYzl0MzJxZm0ya2Fua2p2In0.PNKfkeQwYuyGOTT_x9BJ4Q';
+Copy `.env.example` to `.env` and fill in your token:
+
+```bash
+cp .env.example .env
+# then edit .env and set VITE_MAPBOX_TOKEN=pk.eyJ1...
 ```
+
+The token is read in `src/utils/const.ts` and consumed by `RunMap` / `RouteMap`.
+Do **not** hardcode a token in source — GitHub push protection will reject it,
+and the upstream public token is rate-limited.
 
 ## Change Default Map Tile Style
 

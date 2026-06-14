@@ -19,7 +19,7 @@ const RoutePreview: React.FC<RoutePreviewProps> = ({
   if (activitiesWithRoutes.length === 0) {
     return (
       <div className={`${styles.routePreview} ${className || ''}`}>
-        <div className={styles.noRoute}>暂无路线数据</div>
+        <div className={styles.noRoute}>No route data</div>
       </div>
     );
   }
@@ -39,7 +39,7 @@ const RoutePreview: React.FC<RoutePreviewProps> = ({
   if (allPoints.length === 0) {
     return (
       <div className={`${styles.routePreview} ${className || ''}`}>
-        <div className={styles.noRoute}>路线数据无效</div>
+        <div className={styles.noRoute}>Invalid route data</div>
       </div>
     );
   }

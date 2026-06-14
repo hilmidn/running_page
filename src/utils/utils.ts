@@ -5,7 +5,6 @@ import { RPGeometry } from '@/static/run_countries';
 import { chinaCities } from '@/static/city';
 import {
   MAIN_COLOR,
-  MUNICIPALITY_CITIES_ARR,
   NEED_FIX_MAP,
   RUN_TITLES,
   ACTIVITY_TYPES,
@@ -20,7 +19,21 @@ import {
   MAP_TILE_STYLE_DARK,
   WALKING_TITLES,
   HIKING_TITLES,
-} from './const';
+  LOCATION_TITLE,
+} from '@/utils/const';
+
+// Chinese municipality names (北京 / 上海 / 天津 / 重庆 + the two SARs)
+// used by the location parser to detect province-equivalent cities.
+// Kept local to this module — it's an internal parser hint, not
+// user-facing config.
+const MUNICIPALITY_CITIES_ARR = [
+  '北京市',
+  '上海市',
+  '天津市',
+  '重庆市',
+  '香港特别行政区',
+  '澳门特别行政区',
+];
 import {
   FeatureCollection,
   LineString,

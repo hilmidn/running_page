@@ -388,7 +388,7 @@ const RunMap = ({
           paint={{
             'fill-color': COUNTRY_FILL_COLOR,
             // in China, fill a bit lighter while already filled provinces
-            'fill-opacity': ['case', ['==', ['get', 'name'], '中国'], 0.1, 0.5],
+            'fill-opacity': ['case', ['==', ['get', 'name'], 'China'], 0.1, 0.5],
           }}
           filter={filterCountries}
         />

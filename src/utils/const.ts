@@ -1,17 +1,7 @@
 // Constants
-const MAPBOX_TOKEN =
-  // For security reasons, please avoid using the default public token provided by Mapbox as much as possible.
-  // Instead, manually add a new token and apply URL restrictions.
-  // (please refer to https://github.com/yihong0618/running_page/issues/643#issuecomment-2042668580)
-  'pk.eyJ1IjoiemhlbGVhcm4iLCJhIjoiY2xjMnR3MXFzMXJmczN2bWRnMDk0cHkwaiJ9.5Hk5zVnEMLVMnwHveHHjeA';
-const MUNICIPALITY_CITIES_ARR = [
-  '北京市',
-  '上海市',
-  '天津市',
-  '重庆市',
-  '香港特别行政区',
-  '澳门特别行政区',
-];
+// Mapbox access token. Read from VITE_MAPBOX_TOKEN in .env (see .env.example).
+// Get your own token at https://www.mapbox.com/ — do NOT commit a real token.
+const MAPBOX_TOKEN: string = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
 const MAP_LAYER_LIST = [
   'road-label',
   'waterway-label',
@@ -51,66 +41,64 @@ const SHOW_ELEVATION_GAIN = true;
 const RICH_TITLE = false;
 
 // IF you are outside China please make sure IS_CHINESE = false
+// Controls only the map label language layer (RunMap) — all display
+// strings are English-only. Chinese reverse-geocoding addresses in
+// activity data are still parsed (see utils.extractLocation) so
+// location province / city still populate correctly.
 const IS_CHINESE = false;
 const USE_ANIMATION_FOR_GRID = false;
-const CHINESE_INFO_MESSAGE = (yearLength: number, year: string): string => {
-  const yearStr = year === 'Total' ? '所有' : ` ${year} `;
-  return `记录自己跑步 ${yearLength} 年了，下面列表展示的是${yearStr}的数据`;
-};
-const ENGLISH_INFO_MESSAGE = (yearLength: number, year: string): string =>
-  `Running Journey with ${yearLength} Years, the table shows year ${year} data`;
+// English-only info messages. LocationStat imports these directly.
+const LOCATION_INFO_MESSAGE_FIRST =
+  'Ran through some places — hoping the lit-up dots grow over time.';
+const LOCATION_INFO_MESSAGE_SECOND =
+  "Don't stop. Don't stop running.";
 
-// English is not supported for location info messages yet
-const CHINESE_LOCATION_INFO_MESSAGE_FIRST =
-  '跑过了一些地方，希望随着时间推移，点亮的地方越来越多';
-const CHINESE_LOCATION_INFO_MESSAGE_SECOND = '不要停下来，不要停下奔跑的脚步';
-
-const INFO_MESSAGE = IS_CHINESE ? CHINESE_INFO_MESSAGE : ENGLISH_INFO_MESSAGE;
-const FULL_MARATHON_RUN_TITLE = IS_CHINESE ? '全程马拉松' : 'Full Marathon';
-const HALF_MARATHON_RUN_TITLE = IS_CHINESE ? '半程马拉松' : 'Half Marathon';
-const MORNING_RUN_TITLE = IS_CHINESE ? '清晨跑步' : 'Morning Run';
-const MIDDAY_RUN_TITLE = IS_CHINESE ? '午间跑步' : 'Midday Run';
-const AFTERNOON_RUN_TITLE = IS_CHINESE ? '午后跑步' : 'Afternoon Run';
-const EVENING_RUN_TITLE = IS_CHINESE ? '傍晚跑步' : 'Evening Run';
-const NIGHT_RUN_TITLE = IS_CHINESE ? '夜晚跑步' : 'Night Run';
-const RUN_GENERIC_TITLE = IS_CHINESE ? '跑步' : 'Run';
-const RUN_TRAIL_TITLE = IS_CHINESE ? '越野跑' : 'Trail Run';
-const RUN_TREADMILL_TITLE = IS_CHINESE ? '跑步机' : 'Treadmill Run';
+// Kept the same name for backwards-compat with imports.
+const INFO_MESSAGE = (yearLength: number, year: string): string =>
+  `Running journey with ${yearLength} year${yearLength === 1 ? '' : 's'}, the table shows year ${year} data`;
+const FULL_MARATHON_RUN_TITLE = 'Full Marathon';
+const HALF_MARATHON_RUN_TITLE = 'Half Marathon';
+const MORNING_RUN_TITLE = 'Morning Run';
+const MIDDAY_RUN_TITLE = 'Midday Run';
+const AFTERNOON_RUN_TITLE = 'Afternoon Run';
+const EVENING_RUN_TITLE = 'Evening Run';
+const NIGHT_RUN_TITLE = 'Night Run';
+const RUN_GENERIC_TITLE = 'Run';
+const RUN_TRAIL_TITLE = 'Trail Run';
+const RUN_TREADMILL_TITLE = 'Treadmill Run';
 const MORNING_HIKING_TITLE = 'Morning Hike';
 const MIDDAY_HIKING_TITLE = 'Midday Hike';
 const AFTERNOON_HIKING_TITLE = 'Afternoon Hike';
 const EVENING_HIKING_TITLE = 'Evening Hike';
 const NIGHT_HIKING_TITLE = 'Night Hike';
 const HIKING_GENERIC_TITLE = 'Hiking';
-const CYCLING_TITLE = IS_CHINESE ? '骑行' : 'Cycling';
-const SKIING_TITLE = IS_CHINESE ? '滑雪' : 'Skiing';
+const CYCLING_TITLE = 'Cycling';
+const SKIING_TITLE = 'Skiing';
 const MORNING_WALKING_TITLE = 'Morning Walk';
 const MIDDAY_WALKING_TITLE = 'Midday Walk';
 const AFTERNOON_WALKING_TITLE = 'Afternoon Walk';
 const EVENING_WALKING_TITLE = 'Evening Walk';
 const NIGHT_WALKING_TITLE = 'Night Walk';
 const WALKING_GENERIC_TITLE = 'Walking';
-const SWIMMING_TITLE = IS_CHINESE ? '游泳' : 'Swimming';
-const ALL_TITLE = IS_CHINESE ? '所有' : 'All';
-const ACTIVITY_COUNT_TITLE = IS_CHINESE ? '活动次数' : 'Activity Count';
-const MAX_DISTANCE_TITLE = IS_CHINESE ? '最远距离' : 'Max Distance';
-const MAX_SPEED_TITLE = IS_CHINESE ? '最快速度' : 'Max Speed';
-const TOTAL_TIME_TITLE = IS_CHINESE ? '总时间' : 'Total Time';
-const AVERAGE_SPEED_TITLE = IS_CHINESE ? '平均速度' : 'Average Speed';
-const TOTAL_DISTANCE_TITLE = IS_CHINESE ? '总距离' : 'Total Distance';
-const AVERAGE_DISTANCE_TITLE = IS_CHINESE ? '平均距离' : 'Average Distance';
-const TOTAL_ELEVATION_GAIN_TITLE = IS_CHINESE
-  ? '总海拔爬升'
-  : 'Total Elevation Gain';
-const AVERAGE_HEART_RATE_TITLE = IS_CHINESE ? '平均心率' : 'Average Heart Rate';
-const YEARLY_TITLE = IS_CHINESE ? 'Year' : 'Yearly';
-const MONTHLY_TITLE = IS_CHINESE ? 'Month' : 'Monthly';
-const WEEKLY_TITLE = IS_CHINESE ? 'Week' : 'Weekly';
-const DAILY_TITLE = IS_CHINESE ? 'Day' : 'Daily';
-const LOCATION_TITLE = IS_CHINESE ? 'Location' : 'Location';
-const HOME_PAGE_TITLE = IS_CHINESE ? '首页' : 'Home';
+const SWIMMING_TITLE = 'Swimming';
+const ALL_TITLE = 'All';
+const ACTIVITY_COUNT_TITLE = 'Activity Count';
+const MAX_DISTANCE_TITLE = 'Max Distance';
+const MAX_SPEED_TITLE = 'Max Speed';
+const TOTAL_TIME_TITLE = 'Total Time';
+const AVERAGE_SPEED_TITLE = 'Average Speed';
+const TOTAL_DISTANCE_TITLE = 'Total Distance';
+const AVERAGE_DISTANCE_TITLE = 'Average Distance';
+const TOTAL_ELEVATION_GAIN_TITLE = 'Total Elevation Gain';
+const AVERAGE_HEART_RATE_TITLE = 'Average Heart Rate';
+const YEARLY_TITLE = 'Yearly';
+const MONTHLY_TITLE = 'Monthly';
+const WEEKLY_TITLE = 'Weekly';
+const DAILY_TITLE = 'Daily';
+const LOCATION_TITLE = 'Location';
+const HOME_PAGE_TITLE = 'Home';
 
-const LOADING_TEXT = IS_CHINESE ? '加载中...' : 'Loading...';
+const LOADING_TEXT = 'Loading...';
 
 const ACTIVITY_TYPES = {
   RUN_GENERIC_TITLE,
@@ -170,10 +158,9 @@ const ACTIVITY_TOTAL = {
 export {
   USE_GOOGLE_ANALYTICS,
   GOOGLE_ANALYTICS_TRACKING_ID,
-  CHINESE_LOCATION_INFO_MESSAGE_FIRST,
-  CHINESE_LOCATION_INFO_MESSAGE_SECOND,
+  LOCATION_INFO_MESSAGE_FIRST,
+  LOCATION_INFO_MESSAGE_SECOND,
   MAPBOX_TOKEN,
-  MUNICIPALITY_CITIES_ARR,
   MAP_LAYER_LIST,
   IS_CHINESE,
   ROAD_LABEL_DISPLAY,
@@ -181,6 +168,7 @@ export {
   RUN_TITLES,
   WALKING_TITLES,
   HIKING_TITLES,
+  LOCATION_TITLE,
   USE_ANIMATION_FOR_GRID,
   USE_DASH_LINE,
   LINE_OPACITY,
