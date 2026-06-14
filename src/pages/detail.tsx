@@ -135,7 +135,7 @@ export default function DetailPage() {
           </section>
 
           <section id="hr-recovery">
-            <HRRecovery stream={stream} />
+            <HRRecovery stream={stream} maxHR={maxHR} />
           </section>
 
           <section id="vo2max-estimate">
