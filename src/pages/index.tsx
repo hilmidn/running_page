@@ -39,6 +39,8 @@ import KPITile from '@/components/Home/KPITile';
 import Tabs from '@/components/Home/Tabs';
 import QuickLinks from '@/components/Home/QuickLinks';
 import RecentActivity from '@/components/Home/RecentActivity';
+import Modal from '@/components/Modal';
+import { X, ExternalLink } from 'lucide-react';
 
 const Index = () => {
   const { siteTitle, siteUrl } = useSiteMetadata();
@@ -570,23 +572,35 @@ const Index = () => {
           </aside>
         </div>
 
-        {/* === Detail modal === */}
-        {singleRunId && (
-          <>
-            <DetailActivity id={singleRunId} />
-            <div className="flex items-center justify-center">
+        {/* === Detail modal (popup) === */}
+        <Modal
+          open={singleRunId !== null}
+          onClose={() => locateActivity([])}
+          ariaLabel="Run details"
+        >
+          <div className="relative pr-1 pt-1">
+            <button
+              type="button"
+              onClick={() => locateActivity([])}
+              className="absolute top-2 right-2 z-10 rounded-full bg-zinc-800/90 p-1.5 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-100"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
+            {singleRunId && <DetailActivity id={singleRunId} />}
+            {singleRunId && (
               <a
                 href={`${siteUrl}detail/${singleRunId}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-8 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-8 py-3 text-sm font-semibold text-emerald-400 transition-all hover:bg-emerald-500/30"
+                className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 px-4 py-2.5 text-sm font-semibold text-emerald-400 transition-all hover:bg-emerald-500/30"
               >
-                Open full detail page →
+                Open full detail page
+                <ExternalLink size={14} />
               </a>
-            </div>
-            <hr />
-          </>
-        )}
+            )}
+          </div>
+        </Modal>
       </div>
       {/* Enable Audiences in Vercel Analytics: https://vercel.com/docs/concepts/analytics/audiences/quickstart */}
       {import.meta.env.VERCEL && <Analytics />}

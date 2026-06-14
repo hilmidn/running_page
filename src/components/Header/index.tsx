@@ -5,7 +5,7 @@ import { useTheme, Theme } from '@/hooks/useTheme';
 import styles from './style.module.css';
 
 const Header = () => {
-  const { logo, siteUrl, navLinks } = useSiteMetadata();
+  const { logo, siteTitle, siteUrl, navLinks } = useSiteMetadata();
   const { setTheme } = useTheme();
   const [currentIconIndex, setCurrentIconIndex] = useState(0);
 
@@ -61,39 +61,46 @@ const Header = () => {
   const currentIcon = icons[currentIconIndex];
 
   return (
-    <>
-      <nav className="mx-auto mt-12 flex w-full min-w-max max-w-screen-2xl items-center justify-between pl-6 lg:px-16">
-        <div className="w-1/4">
-          <Link to={siteUrl}>
-            <picture>
-              <img className="h-16 w-16 rounded-full" alt="logo" src={logo} />
-            </picture>
-          </Link>
-        </div>
-        <div className="flex w-3/4 items-center justify-end text-right">
-          {navLinks.map((n, i) => (
-            <a
-              key={i}
-              href={n.url}
-              className="mr-3 text-lg lg:mr-4 lg:text-base"
-            >
-              {n.name}
-            </a>
-          ))}
-          <div className="ml-4 flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={handleToggle}
-              className={`${styles.themeButton} ${styles.themeButtonActive}`}
-              aria-label={`Switch to ${currentIcon.id} theme`}
-              title={`Switch to ${currentIcon.id} theme`}
-            >
-              <div className={styles.iconWrapper}>{currentIcon.svg}</div>
-            </button>
-          </div>
-        </div>
-      </nav>
-    </>
+    <nav
+      className="sticky top-0 z-40 mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-900/70 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-zinc-900/50 lg:px-16"
+      aria-label="Primary"
+    >
+      <Link
+        to={siteUrl}
+        className="flex items-center gap-3 py-2.5 transition-opacity hover:opacity-80"
+      >
+        <picture>
+          <img
+            className="h-10 w-10 rounded-full ring-1 ring-zinc-700/60"
+            alt="logo"
+            src={logo}
+          />
+        </picture>
+        <span className="hidden text-sm font-semibold tracking-tight text-zinc-100 sm:block">
+          {siteTitle}
+        </span>
+      </Link>
+      <div className="flex items-center gap-1">
+        {navLinks.map((n, i) => (
+          <a
+            key={i}
+            href={n.url}
+            className="rounded-md px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800/60 hover:text-zinc-100"
+          >
+            {n.name}
+          </a>
+        ))}
+        <button
+          type="button"
+          onClick={handleToggle}
+          className={`${styles.themeButton} ${styles.themeButtonActive} ml-1`}
+          aria-label={`Switch to ${currentIcon.id} theme`}
+          title={`Switch to ${currentIcon.id} theme`}
+        >
+          <div className={styles.iconWrapper}>{currentIcon.svg}</div>
+        </button>
+      </div>
+    </nav>
   );
 };
 
