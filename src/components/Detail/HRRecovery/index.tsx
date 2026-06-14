@@ -5,11 +5,13 @@ import {
   secondsToTimeString,
   getHRRecoveryColor,
   type HRRecoveryGrade,
+  type HRRecoveryEffort,
 } from '@/utils/activityAnalytics';
 import type { ActivityStream } from '@/utils/activityAnalytics';
 
 interface Props {
   stream: ActivityStream;
+  maxHR?: number;
 }
 
 function gradeBadgeClass(grade: HRRecoveryGrade): string {
@@ -99,8 +101,11 @@ function RecoveryRow({
   );
 }
 
-export default function HRRecovery({ stream }: Props) {
-  const data = useMemo(() => calculateHRRecovery(stream), [stream]);
+export default function HRRecovery({ stream, maxHR = 180 }: Props) {
+  const data = useMemo(
+    () => calculateHRRecovery(stream, maxHR),
+    [stream, maxHR],
+  );
 
   if (!data.available) {
     return (
@@ -120,6 +125,42 @@ export default function HRRecovery({ stream }: Props) {
 
   const gradeColor = getHRRecoveryColor(data.grade);
 
+  // Effort-context overrides the visual label. The clinical HRR-1
+  // thresholds (≥18 Excellent, etc.) were derived from high-intensity
+  // efforts — applying them to easy Z2 runs is meaningless and
+  // misleads the user into thinking their cardiovascular system is
+  // "Poor". The pill colour tracks the underlying grade, but the
+  // *label* is contextualised.
+  const effortBadgeMeta: Record<
+    HRRecoveryEffort,
+    { label: string; className: string }
+  > = {
+    high: {
+      label: data.label,
+      className: gradeBadgeClass(data.grade),
+    },
+    moderate: {
+      label: 'Moderate effort',
+      className:
+        'bg-blue-500/20 text-blue-400 border-blue-500/40',
+    },
+    low: {
+      label: 'Low-intensity context',
+      className:
+        'bg-gray-700/40 text-gray-300 border-gray-600',
+    },
+  };
+  const effortMeta = effortBadgeMeta[data.effort];
+
+  // Effort-aware message: re-frames the grade when peak HR was below the
+  // clinical threshold so the user doesn't misread "Poor" as cardiac.
+  const effortMessage =
+    data.effort === 'low'
+      ? `Peak HR was ${data.peakHRPercent?.toFixed(0)}% of maxHR — below the 75% threshold for a meaningful HRR-1 measurement. The drop looks small because the body wasn't stressed enough to mount a parasympathetic rebound. The numbers are still useful for tracking trends; use a tempo or interval session to get a clinical HRR-1 reading.`
+      : data.effort === 'moderate'
+        ? `Peak HR was ${data.peakHRPercent?.toFixed(0)}% of maxHR — close to the 75% clinical threshold. HRR-1 reading is directional; for a definitive answer use a high-intensity effort.`
+        : data.message;
+
   return (
     <div
       className={`bg-linear-to-b space-y-4 rounded-2xl border from-gray-900 to-gray-800 p-6 text-white shadow-lg ${gradeBorderClass(data.grade)}`}
@@ -129,9 +170,9 @@ export default function HRRecovery({ stream }: Props) {
         <HeartPulse className="text-red-400" size={18} />
         <h3 className="text-sm font-semibold text-gray-200">HR Recovery</h3>
         <span
-          className={`ml-auto rounded-full border px-2.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${gradeBadgeClass(data.grade)}`}
+          className={`ml-auto rounded-full border px-2.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${effortMeta.className}`}
         >
-          {data.label}
+          {effortMeta.label}
         </span>
       </div>
 
@@ -155,7 +196,7 @@ export default function HRRecovery({ stream }: Props) {
               bpm @ +1 min
             </span>
           </div>
-          <p className="mt-1.5 text-xs text-gray-400">{data.message}</p>
+          <p className="mt-1.5 text-xs text-gray-400">{effortMessage}</p>
         </div>
       </div>
 
@@ -194,6 +235,33 @@ export default function HRRecovery({ stream }: Props) {
           <span className="font-mono font-semibold text-gray-200">
             {data.peakHR} bpm
           </span>
+          {data.peakHRPercent != null && (
+            <span
+              className="rounded-md border px-1.5 py-0.5 text-[10px] font-mono"
+              style={{
+                color:
+                  data.effort === 'high'
+                    ? '#10b981'
+                    : data.effort === 'moderate'
+                      ? '#3b82f6'
+                      : '#9ca3af',
+                borderColor:
+                  data.effort === 'high'
+                    ? '#10b98140'
+                    : data.effort === 'moderate'
+                      ? '#3b82f640'
+                      : '#6b728040',
+                backgroundColor:
+                  data.effort === 'high'
+                    ? '#10b98115'
+                    : data.effort === 'moderate'
+                      ? '#3b82f615'
+                      : '#6b728015',
+              }}
+            >
+              {data.peakHRPercent.toFixed(0)}% maxHR
+            </span>
+          )}
           <span className="text-[10px] text-gray-500">
             @ {secondsToTimeString(data.peakTimeSec)} ·{' '}
             {data.peakDistanceKm.toFixed(2)} km
@@ -202,9 +270,11 @@ export default function HRRecovery({ stream }: Props) {
       </div>
 
       <p className="text-[10px] leading-relaxed text-gray-500">
-        HRR-1 ≥ 18 bpm is a strong indicator of cardiovascular fitness. Run a
-        hard interval near the end of a workout, then slow to a jog to give
-        the recovery window a clean reading.
+        HRR-1 ≥ 18 bpm is a strong indicator of cardiovascular fitness.
+        Clinical thresholds assume peak HR ≥ 85% of maxHR (high-intensity
+        effort). For easy / moderate runs the grade is contextualised —
+        use a tempo or interval session to get a definitive HRR-1
+        reading.
       </p>
     </div>
   );

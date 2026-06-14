@@ -1751,6 +1751,21 @@ export function createCadencePaceScatterData(
 
 export type HRRecoveryGrade = 'excellent' | 'good' | 'fair' | 'poor' | 'na';
 
+/**
+ * Effort context for HRR grading. The clinical HRR-1 thresholds
+ * (≥18 Excellent, 12-17 Good, 6-11 Fair, <6 Poor) were derived from
+ * research on athletes measured **after high-intensity efforts**
+ * (VO2max test, 5K race, hard intervals). Applying them to easy or
+ * moderate runs produces systematically low numbers — not because the
+ * runner is unhealthy, but because the body wasn't stressed enough to
+ * mount a meaningful parasympathetic rebound.
+ *
+ * The component uses this to swap the grade label for a contextual
+ * "Low-intensity context" badge when the peak HR is below 75% of
+ * maxHR, so the user doesn't mis-read "Poor" as a cardiac warning.
+ */
+export type HRRecoveryEffort = 'high' | 'moderate' | 'low';
+
 export interface HRRecoveryData {
     available: boolean;
     reason?: string;
@@ -1766,6 +1781,14 @@ export interface HRRecoveryData {
     grade: HRRecoveryGrade;
     label: string;
     message: string;
+    /** Peak HR as a percentage of maxHR. */
+    peakHRPercent: number | null;
+    /**
+     * Effort context — high means peak HR ≥85% of maxHR (clinical
+     * thresholds are valid); moderate 75–85% (interpret with care);
+     * low <75% (metric is not diagnostic for this run).
+     */
+    effort: HRRecoveryEffort;
 }
 
 /**
@@ -1783,7 +1806,10 @@ export interface HRRecoveryData {
  * Requires at least 3 minutes of HR samples after the peak to surface
  * the 1/2/3-min metrics — short runs are hidden gracefully.
  */
-export function calculateHRRecovery(stream: ActivityStream): HRRecoveryData {
+export function calculateHRRecovery(
+    stream: ActivityStream,
+    maxHR: number = 180,
+): HRRecoveryData {
     const empty: HRRecoveryData = {
         available: false,
         peakHR: 0,
@@ -1798,6 +1824,8 @@ export function calculateHRRecovery(stream: ActivityStream): HRRecoveryData {
         grade: 'na',
         label: 'N/A',
         message: '',
+        peakHRPercent: null,
+        effort: 'low',
     };
 
     if (!stream.heartrate || stream.heartrate.length === 0) {
@@ -1842,6 +1870,10 @@ export function calculateHRRecovery(stream: ActivityStream): HRRecoveryData {
             grade: 'na',
             label: 'N/A',
             message: '',
+            peakHRPercent: maxHR > 0 ? (peakHR / maxHR) * 100 : null,
+            effort: classifyEffort(
+                maxHR > 0 ? (peakHR / maxHR) * 100 : null,
+            ),
         };
     }
 
@@ -1930,7 +1962,18 @@ export function calculateHRRecovery(stream: ActivityStream): HRRecoveryData {
         grade,
         label,
         message,
+        peakHRPercent: maxHR > 0 ? (peakHR / maxHR) * 100 : null,
+        effort: classifyEffort(
+            maxHR > 0 ? (peakHR / maxHR) * 100 : null,
+        ),
     };
+}
+
+function classifyEffort(peakHRPercent: number | null): HRRecoveryEffort {
+    if (peakHRPercent == null) return 'low';
+    if (peakHRPercent >= 85) return 'high';
+    if (peakHRPercent >= 75) return 'moderate';
+    return 'low';
 }
 
 /**
