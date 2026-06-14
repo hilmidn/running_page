@@ -17,6 +17,10 @@ import VO2maxEstimate from '@/components/Detail/VO2maxEstimate';
 import ElevationAnalysis from '@/components/Detail/ElevationAnalysis';
 import PerformanceEstimates from '@/components/Detail/PerformanceEstimates';
 import HRZoneDistribution from '@/components/Detail/HRZoneDistribution';
+import TrainingLoad from '@/components/Detail/TrainingLoad';
+import NegativeSplit from '@/components/Detail/NegativeSplit';
+import StrideLength from '@/components/Detail/StrideLength';
+import LactateThreshold from '@/components/Detail/LactateThreshold';
 import type { ActivityStream } from '@/utils/activityAnalytics';
 
 function LoadingSkeleton() {
@@ -141,6 +145,14 @@ export default function DetailPage() {
           <section id="hr-zone-distribution">
             <HRZoneDistribution stream={stream} maxHR={maxHR} />
           </section>
+
+          <section id="training-load">
+            <TrainingLoad stream={stream} maxHR={maxHR} />
+          </section>
+
+          <section id="pacing-pattern">
+            <NegativeSplit stream={stream} />
+          </section>
         </div>
 
         {/* Right Column — Cadence + Pace Zone + Extra */}
@@ -163,6 +175,14 @@ export default function DetailPage() {
 
           <section id="performance-estimates">
             <PerformanceEstimates stream={stream} />
+          </section>
+
+          <section id="stride-length">
+            <StrideLength stream={stream} />
+          </section>
+
+          <section id="lactate-threshold">
+            <LactateThreshold stream={stream} maxHR={maxHR} />
           </section>
         </div>
       </div>
