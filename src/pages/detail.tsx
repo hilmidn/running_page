@@ -10,6 +10,7 @@ import CadenceChart from '@/components/Detail/CadenceChart';
 import PaceZoneChart from '@/components/Detail/PaceZone';
 import RouteMap from '@/components/Detail/RouteMap';
 import SplitsTable from '@/components/Detail/SplitsTable';
+import CardiacDrift from '@/components/Detail/CardiacDrift';
 import type { ActivityStream } from '@/utils/activityAnalytics';
 
 function LoadingSkeleton() {
@@ -117,6 +118,10 @@ export default function DetailPage() {
 
           <section id="pace-chart">
             <PaceChart stream={stream} />
+          </section>
+
+          <section id="cardiac-drift">
+            <CardiacDrift stream={stream} maxHR={maxHR} />
           </section>
         </div>
 

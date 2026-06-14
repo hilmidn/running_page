@@ -39,6 +39,47 @@ function getPaceBorder(pace: number, avgPace: number): string {
   return 'border-l-red-500';
 }
 
+// HR zone → tailwind badge classes (Z1 recovery → Z5 VO2 max)
+const HR_ZONE_BADGE: Record<number, string> = {
+  1: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  2: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+  3: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+  4: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+  5: 'bg-red-500/20 text-red-400 border-red-500/40',
+};
+
+function HRZonePill({ zone }: { zone: number | undefined }) {
+  if (!zone) return null;
+  return (
+    <span
+      className={`inline-flex h-4 items-center rounded border px-1 text-[9px] font-semibold tracking-wide ${
+        HR_ZONE_BADGE[zone] || 'bg-gray-700 text-gray-400 border-gray-600'
+      }`}
+    >
+      Z{zone}
+    </span>
+  );
+}
+
+// Subtitle showing min–max range below main number
+function RangeSub({
+  min,
+  max,
+  unit,
+}: {
+  min: number | undefined;
+  max: number | undefined;
+  unit: string;
+}) {
+  if (min == null || max == null) return null;
+  if (Math.abs(max - min) < 0.5) return null; // hide if no spread
+  return (
+    <div className="text-[9px] leading-tight text-gray-500">
+      {min.toFixed(0)}–{max.toFixed(0)} {unit}
+    </div>
+  );
+}
+
 const columns: { key: SortKey; label: string; mobile: boolean }[] = [
   { key: 'index', label: '#', mobile: true },
   { key: 'distanceKm', label: 'Dist (km)', mobile: true },
@@ -171,10 +212,19 @@ export default function SplitsTable({ stream }: Props) {
                   {seg.durationFormatted}
                 </td>
                 <td className="px-2 py-2 font-mono text-gray-300">
-                  {seg.paceFormatted}
+                  <div>{seg.paceFormatted}</div>
+                  <RangeSub
+                    min={seg.minPace}
+                    max={seg.maxPace}
+                    unit="s/km"
+                  />
                 </td>
                 <td className="px-2 py-2 font-mono text-gray-300">
-                  {seg.avgHR ?? '—'}
+                  <div className="flex items-center gap-1.5">
+                    <span>{seg.avgHR ?? '—'}</span>
+                    <HRZonePill zone={seg.hrZone} />
+                  </div>
+                  <RangeSub min={seg.minHR} max={seg.maxHR} unit="bpm" />
                 </td>
                 <td className="px-2 py-2 font-mono text-gray-300">
                   <span className="text-green-400">+{seg.elevationGain}</span>
