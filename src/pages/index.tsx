@@ -1,16 +1,24 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { Helmet } from 'react-helmet-async';
+import {
+  Footprints,
+  Flame,
+  Calendar,
+  TrendingUp,
+  MapPin,
+  List,
+  Grid3x3,
+  Globe,
+} from 'lucide-react';
 import Layout from '@/components/Layout';
 import LocationStat from '@/components/LocationStat';
 import RunMap from '@/components/RunMap';
 import RunTable from '@/components/RunTable';
 import SVGStat from '@/components/SVGStat';
-import YearsStat from '@/components/YearsStat';
 import useActivities from '@/hooks/useActivities';
 import useSiteMetadata from '@/hooks/useSiteMetadata';
 import { useInterval } from '@/hooks/useInterval';
-import { IS_CHINESE } from '@/utils/const';
 import {
   Activity,
   IViewState,
@@ -27,7 +35,10 @@ import {
 } from '@/utils/utils';
 import { useTheme } from '@/hooks/useTheme';
 import DetailActivity from '@/components/Detail/Activity';
-import { Link } from 'react-router-dom';
+import KPITile from '@/components/Home/KPITile';
+import Tabs from '@/components/Home/Tabs';
+import QuickLinks from '@/components/Home/QuickLinks';
+import RecentActivity from '@/components/Home/RecentActivity';
 
 const Index = () => {
   const { siteTitle, siteUrl } = useSiteMetadata();
@@ -360,89 +371,223 @@ const Index = () => {
             selectedRunDateRef.current = runDate;
             locateActivity(runIDsOnDate);
           }
+          return;
         }
       }
     };
+
     svgStat.addEventListener('click', handleClick);
+
     return () => {
-      svgStat && svgStat.removeEventListener('click', handleClick);
+      svgStat?.removeEventListener('click', handleClick);
     };
-  }, [year]);
+  }, [year, runs, thisYear, locateActivity]);
 
   const { theme } = useTheme();
+
+  // === Derived KPIs (all from activities, no streams needed) ===
+  const kpis = useMemo(() => {
+    const totalDistanceM = activities.reduce((s, a) => s + a.distance, 0);
+    const totalRuns = activities.length;
+    const longestRun = activities.reduce(
+      (best, a) => (a.distance > best.distance ? a : best),
+      activities[0] ?? { distance: 0 }
+    );
+    const thisYearRuns = activities.filter(
+      (a) => a.start_date_local.slice(0, 4) === thisYear
+    );
+    const thisYearKm = thisYearRuns.reduce((s, a) => s + a.distance, 0) / 1000;
+    return {
+      totalKm: totalDistanceM / 1000,
+      totalRuns,
+      longestKm: longestRun.distance / 1000,
+      thisYear,
+      thisYearKm,
+    };
+  }, [activities, thisYear]);
+
+  // === Year links for sidebar ===
+  const yearLinks = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const a of activities) {
+      const y = a.start_date_local.slice(0, 4);
+      map[y] = (map[y] ?? 0) + 1;
+    }
+    return Object.keys(map)
+      .sort()
+      .reverse()
+      .map((y) => ({ year: y, count: map[y] }));
+  }, [activities]);
 
   return (
     <Layout>
       <Helmet>
         <html lang="en" data-theme={theme} />
       </Helmet>
-      <div className="w-full lg:w-1/3">
-        <h1 className="my-12 mt-6 text-5xl font-extrabold italic">
-          <a href={siteUrl}>{siteTitle}</a>
-        </h1>
-        {(viewState.zoom ?? 0) <= 3 && IS_CHINESE ? (
-          <LocationStat
-            changeYear={changeYear}
-            changeCity={changeCity}
-            changeTitle={changeTitle}
-          />
-        ) : (
-          <YearsStat year={year} onClick={changeYear} />
-        )}
-      </div>
-      <div className="w-full lg:w-2/3" id="map-container">
-        <>
-          <RunMap
-            title={title}
-            viewState={viewState}
-            geoData={animatedGeoData}
-            setViewState={setViewState}
-            changeYear={changeYear}
-            thisYear={year}
-            animationTrigger={animationTrigger}
-          />
-          <hr />
-          {singleRunId && (
-            <>
-              <DetailActivity id={singleRunId} />
-              <div className="flex items-center justify-center">
-                <Link
-                  to={`/detail/${singleRunId}`}
-                  target="_blank"
-                  className="mt-8 rounded-full bg-orange-500 px-8 py-3 text-lg font-semibold text-white transition-all hover:bg-orange-600"
-                >
-                  Detail
-                </Link>
-              </div>
-              <hr />
-            </>
-          )}
-        </>
-        {year === 'Total' ? (
-          <SVGStat />
-        ) : (
-          <>
+      <div className="w-full space-y-6">
+        {/* === Hero === */}
+        <section className="relative overflow-hidden rounded-2xl border border-zinc-700/60 bg-gradient-to-br from-zinc-900 via-zinc-900 to-emerald-950/40 p-6 shadow-lg lg:p-8">
+          <div className="pointer-events-none absolute -top-12 -right-12 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-12 -left-12 h-48 w-48 rounded-full bg-sky-500/5 blur-3xl" />
+          <div className="relative flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <select defaultValue={''}>
-                <option value={''}>All Type</option>
-                <option value={'run'}>Run</option>
-                <option value={'walk'}>Walk</option>
-                <option value={'hike'}>Hike</option>
-              </select>
-              <select defaultValue={10}>
-                <option value={10}>10</option>
-                <option value={30}>30</option>
-                <option value={50}>50</option>
-                <option value={99}>All</option>
-              </select>
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold tracking-wider text-emerald-400 uppercase">
+                <Footprints size={11} />
+                Run Archive
+              </div>
+              <h1 className="text-3xl font-extrabold tracking-tight text-zinc-50 italic lg:text-5xl">
+                <a
+                  href={siteUrl}
+                  className="bg-gradient-to-br from-zinc-50 to-emerald-400 bg-clip-text text-transparent transition-opacity hover:opacity-80"
+                >
+                  {siteTitle}
+                </a>
+              </h1>
+              <p className="mt-2 max-w-xl text-sm text-zinc-400">
+                Every step logged, every climb earned. Browse the map,
+                scan the heatmap, or dive into the full multi-run
+                trends dashboard.
+              </p>
             </div>
-            <RunTable
-              runs={runs}
-              locateActivity={locateActivity}
-              setActivity={setActivity}
-              runIndex={runIndex}
-              setRunIndex={setRunIndex}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 px-2.5 py-1 font-mono text-zinc-300">
+                <Calendar size={12} className="text-emerald-400" />
+                {kpis.totalRuns} runs
+              </span>
+              <span className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 px-2.5 py-1 font-mono text-zinc-300">
+                <Flame size={12} className="text-amber-400" />
+                {activities[0]?.streak ?? 0}d streak
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* === KPI tiles === */}
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+          <KPITile
+            label="Total distance"
+            value={`${kpis.totalKm.toFixed(0)} km`}
+            sublabel={`across ${kpis.totalRuns} runs`}
+            icon={<TrendingUp size={16} />}
+            accent="emerald"
+          />
+          <KPITile
+            label="Total runs"
+            value={kpis.totalRuns.toString()}
+            sublabel={`since ${activities[activities.length - 1]?.start_date_local.slice(0, 4) ?? '—'}`}
+            icon={<List size={16} />}
+            accent="sky"
+          />
+          <KPITile
+            label={`${kpis.thisYear} YTD`}
+            value={`${kpis.thisYearKm.toFixed(0)} km`}
+            sublabel="this year so far"
+            icon={<Calendar size={16} />}
+            accent="amber"
+          />
+          <KPITile
+            label="Longest run"
+            value={`${kpis.longestKm.toFixed(1)} km`}
+            sublabel="single best effort"
+            icon={<Flame size={16} />}
+            accent="fuchsia"
+          />
+        </section>
+
+        {/* === Main grid: 2 columns (main + sidebar) === */}
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+          {/* Main column */}
+          <main className="space-y-6">
+            {/* Map card */}
+            <section className="overflow-hidden rounded-2xl border border-zinc-700/60 bg-zinc-900/60 shadow-lg backdrop-blur-sm">
+              <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 bg-zinc-900/80 px-4 py-3 lg:px-5">
+                <MapPin size={14} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold tracking-wide text-zinc-200 uppercase">
+                  {title || `${thisYear} Running Map`}
+                </h2>
+                <span className="ml-auto rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[10px] font-mono text-zinc-400">
+                  {runs.length} run{runs.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <RunMap
+                title={title}
+                viewState={viewState}
+                setViewState={setViewState}
+                changeYear={changeYear}
+                geoData={animatedGeoData}
+                thisYear={thisYear}
+                animationTrigger={animationTrigger}
+              />
+            </section>
+
+            {/* Tabs: Runs / Heatmap / Locations */}
+            <Tabs
+              tabs={[
+                {
+                  id: 'runs',
+                  label: 'Runs',
+                  icon: <List size={12} />,
+                  content:
+                    year === 'Total' ? (
+                      <SVGStat />
+                    ) : (
+                      <RunTable
+                        runs={runs}
+                        locateActivity={locateActivity}
+                        setActivity={setActivity}
+                        runIndex={runIndex}
+                        setRunIndex={setRunIndex}
+                      />
+                    ),
+                },
+                {
+                  id: 'heatmap',
+                  label: 'Heatmap',
+                  icon: <Grid3x3 size={12} />,
+                  content: <SVGStat />,
+                },
+                {
+                  id: 'locations',
+                  label: 'Locations',
+                  icon: <Globe size={12} />,
+                  content: (
+                    <LocationStat
+                      changeYear={changeYear}
+                      changeCity={changeCity}
+                      changeTitle={changeTitle}
+                    />
+                  ),
+                },
+              ]}
             />
+          </main>
+
+          {/* Right rail */}
+          <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+            <QuickLinks
+              yearLinks={yearLinks}
+              onYearSelect={changeYear}
+              selectedYear={year}
+            />
+            <RecentActivity activities={activities} limit={5} />
+          </aside>
+        </div>
+
+        {/* === Detail modal === */}
+        {singleRunId && (
+          <>
+            <DetailActivity id={singleRunId} />
+            <div className="flex items-center justify-center">
+              <a
+                href={`${siteUrl}detail/${singleRunId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-8 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-8 py-3 text-sm font-semibold text-emerald-400 transition-all hover:bg-emerald-500/30"
+              >
+                Open full detail page →
+              </a>
+            </div>
+            <hr />
           </>
         )}
       </div>
