@@ -213,11 +213,23 @@ export default function SplitsTable({ stream }: Props) {
                 </td>
                 <td className="px-2 py-2 font-mono text-gray-300">
                   <div>{seg.paceFormatted}</div>
-                  <RangeSub
-                    min={seg.minPace}
-                    max={seg.maxPace}
-                    unit="s/km"
-                  />
+                  {seg.paceStdDev > 0 && (
+                    <div
+                      className="text-[9px] leading-tight"
+                      style={{
+                        color:
+                          seg.paceStdDev < 4
+                            ? '#10b981'
+                            : seg.paceStdDev < 8
+                              ? '#3b82f6'
+                              : seg.paceStdDev < 14
+                                ? '#f59e0b'
+                                : '#ef4444',
+                      }}
+                    >
+                      ±{seg.paceStdDev.toFixed(1)} s/km
+                    </div>
+                  )}
                 </td>
                 <td className="px-2 py-2 font-mono text-gray-300">
                   <div className="flex items-center gap-1.5">

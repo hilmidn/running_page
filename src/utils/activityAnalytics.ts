@@ -63,6 +63,7 @@ export interface SegmentStats {
     paceFormatted: string;
     minPace: number;
     maxPace: number;
+    paceStdDev: number; // sec/km — sample-level variability inside the split
     avgHR?: number;
     maxHR?: number;
     minHR?: number;
@@ -780,6 +781,7 @@ export function calculateSegmentStats(
     // Pace stats
     let minPace = avgPace;
     let maxPace = avgPace;
+    const subPaces: number[] = [];
 
     for (let i = startIdx; i < endIdx; i++) {
         const segDist = (stream.distance[i + 1] || 0) - (stream.distance[i] || 0);
@@ -789,8 +791,20 @@ export function calculateSegmentStats(
             if (pace > 0 && isFinite(pace)) {
                 minPace = Math.min(minPace, pace);
                 maxPace = Math.max(maxPace, pace);
+                subPaces.push(pace);
             }
         }
+    }
+
+    // Pace variability — sample-level standard deviation. Useful for
+    // spotting late-run fatigue in tempo workouts.
+    let paceStdDev = 0;
+    if (subPaces.length >= 4) {
+        const mean = subPaces.reduce((a, b) => a + b, 0) / subPaces.length;
+        const variance =
+            subPaces.reduce((sum, p) => sum + (p - mean) * (p - mean), 0) /
+            subPaces.length;
+        paceStdDev = Math.sqrt(variance);
     }
 
     return {
@@ -806,6 +820,7 @@ export function calculateSegmentStats(
         paceFormatted: formatPace(avgPace),
         minPace,
         maxPace,
+        paceStdDev,
         avgHR,
         maxHR,
         minHR,
@@ -1044,6 +1059,503 @@ export function getDriftColor(status: CardiacDriftStatus): string {
         default:
             return '#6b7280'; // gray-500
     }
+}
+
+// ============== VO2MAX ESTIMATE ==============
+
+export type VO2maxGrade =
+    | 'elite'
+    | 'excellent'
+    | 'good'
+    | 'fair'
+    | 'beginner'
+    | 'na';
+
+export interface VO2maxEstimate {
+    available: boolean;
+    reason?: string;
+    /** From overall activity average speed — Daniels/Gilbert formula. */
+    fromAverage: number;
+    /** From the best rolling 5-min sustained effort (race-fitness proxy). */
+    fromBestEffort: number | null;
+    bestEffortSpeed: number | null; // m/s — used for the rolling window
+    bestEffortTimeWindow: { startSec: number; endSec: number } | null;
+    grade: VO2maxGrade;
+    label: string;
+    message: string;
+}
+
+/**
+ * Estimate VO2max from a running activity.
+ *
+ * Uses the Daniels/Gilbert formula:
+ *   VO2 = -4.60 + 0.182258 * v + 0.000104 * v²   (v in m/min)
+ *
+ * Two estimates are returned:
+ *   1. **From average** — uses the overall activity average speed. Best
+ *      when the entire run is at a single steady effort (e.g. a tempo run
+ *      or time trial). Underestimates fitness if the run has easy
+ *      warm-up / cooldown mixed in.
+ *   2. **From best 5-min effort** — scans the stream for the fastest
+ *      sustained 5-minute rolling window. This is the better race-fitness
+ *      proxy because it isolates the hardest effort from warm-up and
+ *      recovery sections.
+ *
+ * Grade bands (Daniels' VDOT rough guide for trained adult males):
+ *   - < 40   → beginner
+ *   - 40–50  → fair
+ *   - 50–60  → good
+ *   - 60–70  → excellent
+ *   - ≥ 70   → elite
+ */
+export function estimateVO2max(
+    stream: ActivityStream,
+    fallbackAvgSpeedMps?: number,
+): VO2maxEstimate {
+    const empty: VO2maxEstimate = {
+        available: false,
+        fromAverage: 0,
+        fromBestEffort: null,
+        bestEffortSpeed: null,
+        bestEffortTimeWindow: null,
+        grade: 'na',
+        label: 'N/A',
+        message: '',
+    };
+
+    if (!stream.distance || stream.distance.length < 2) {
+        return { ...empty, reason: 'No distance data in this activity.' };
+    }
+    if (!stream.time || stream.time.length < 2) {
+        return { ...empty, reason: 'No time data in this activity.' };
+    }
+
+    const totalDist = stream.distance[stream.distance.length - 1] || 0;
+    const totalTime = stream.time[stream.time.length - 1] || 0;
+    if (totalDist <= 0 || totalTime <= 0) {
+        return { ...empty, reason: 'Activity has zero distance/time.' };
+    }
+
+    const avgSpeedMps = totalDist / totalTime;
+    const fromAverage = vo2FromSpeed(avgSpeedMps);
+
+    // Best rolling 5-min effort. We need a stream long enough that the
+    // window is actually meaningful — at least 5 minutes of running.
+    let bestEffortSpeed: number | null = null;
+    let bestStart = 0;
+    let bestEnd = 0;
+    const windowSec = 300; // 5 minutes
+
+    if (totalTime >= windowSec) {
+        let j = 0;
+        for (let i = 0; i < stream.time.length; i++) {
+            const tStart = stream.time[i] || 0;
+            // advance j until t[j] is at least windowSec after tStart
+            while (
+                j < stream.time.length &&
+                (stream.time[j] || 0) - tStart < windowSec
+            ) {
+                j++;
+            }
+            if (j >= stream.time.length) break;
+            const tEnd = stream.time[j] || 0;
+            const dStart = stream.distance[i] || 0;
+            const dEnd = stream.distance[j] || 0;
+            const distM = dEnd - dStart;
+            const dt = tEnd - tStart;
+            if (distM > 0 && dt >= windowSec - 5) {
+                const speed = distM / dt;
+                if (bestEffortSpeed == null || speed > bestEffortSpeed) {
+                    bestEffortSpeed = speed;
+                    bestStart = tStart;
+                    bestEnd = tEnd;
+                }
+            }
+        }
+    }
+
+    const fromBestEffort =
+        bestEffortSpeed != null ? vo2FromSpeed(bestEffortSpeed) : null;
+
+    // Grade the best-effort number (more representative), fall back to avg.
+    const primary = fromBestEffort ?? fromAverage;
+    const { grade, label, message } = gradeVO2max(primary);
+
+    return {
+        available: true,
+        fromAverage,
+        fromBestEffort,
+        bestEffortSpeed,
+        bestEffortTimeWindow:
+            bestEffortSpeed != null
+                ? { startSec: bestStart, endSec: bestEnd }
+                : null,
+        grade,
+        label,
+        message,
+    };
+}
+
+function vo2FromSpeed(speedMps: number): number {
+    if (speedMps <= 0) return 0;
+    const v = speedMps * 60; // m/min
+    return -4.6 + 0.182258 * v + 0.000104 * v * v;
+}
+
+function gradeVO2max(value: number): {
+    grade: VO2maxGrade;
+    label: string;
+    message: string;
+} {
+    if (value <= 0) {
+        return {
+            grade: 'na',
+            label: 'N/A',
+            message: 'Not enough data to estimate VO2max.',
+        };
+    }
+    if (value >= 70) {
+        return {
+            grade: 'elite',
+            label: 'Elite',
+            message: 'Elite-level aerobic capacity. Top-tier runner.',
+        };
+    }
+    if (value >= 60) {
+        return {
+            grade: 'excellent',
+            label: 'Excellent',
+            message: 'Excellent aerobic capacity. Strong racing potential.',
+        };
+    }
+    if (value >= 50) {
+        return {
+            grade: 'good',
+            label: 'Good',
+            message: 'Good aerobic fitness. Solid base for half-marathon training.',
+        };
+    }
+    if (value >= 40) {
+        return {
+            grade: 'fair',
+            label: 'Fair',
+            message: 'Decent fitness — consistent easy mileage will keep moving it up.',
+        };
+    }
+    return {
+        grade: 'beginner',
+        label: 'Beginner',
+        message:
+            'Plenty of headroom. Easy-zone volume and patience will pay off.',
+    };
+}
+
+export function getVO2maxColor(grade: VO2maxGrade): string {
+    switch (grade) {
+        case 'elite':
+            return '#a855f7'; // purple-500
+        case 'excellent':
+            return '#10b981'; // emerald-500
+        case 'good':
+            return '#3b82f6'; // blue-500
+        case 'fair':
+            return '#f59e0b'; // amber-500
+        case 'beginner':
+            return '#6b7280'; // gray-500
+        default:
+            return '#6b7280';
+    }
+}
+
+// ============== GRADE-ADJUSTED PACE & ELEVATION ZONES ==============
+
+/**
+ * Minetti cost-of-running coefficients (1998) — energy cost per kg per
+ * meter as a 5th-degree polynomial in grade (gradient as decimal, e.g.
+ * 0.05 = +5% uphill, -0.10 = -10% downhill).
+ *
+ *   C(g) = 155.4 g⁵ - 30.4 g⁴ - 43.3 g³ + 46.3 g² + 19.5 g + 3.6
+ *
+ * On the flat (g=0): 3.6 J/kg/m, which is the canonical reference.
+ *
+ * We use the inverse of the cost ratio to translate actual pace into a
+ * flat-equivalent Grade-Adjusted Pace (GAP):
+ *
+ *   GAP_pace = actual_pace * (C(g) / C(0)) = actual_pace * (C(g) / 3.6)
+ *
+ * - Uphill (g > 0) → C > 3.6 → GAP_pace higher (slower flat equivalent) ✓
+ * - Downhill (g < 0, modest) → C < 3.6 → GAP_pace lower (faster flat equivalent) ✓
+ * - Steep downhill (g < -0.2) → C rises again, model becomes more punitive
+ */
+export function minettiCostPerKgPerMeter(grade: number): number {
+    const g = grade;
+    return (
+        155.4 * g ** 5 -
+        30.4 * g ** 4 -
+        43.3 * g ** 3 +
+        46.3 * g ** 2 +
+        19.5 * g +
+        3.6
+    );
+}
+
+const FLAT_COST = 3.6; // J/kg/m at g=0
+
+export type GradeBand = 'steep_up' | 'up' | 'flat' | 'down' | 'steep_down';
+
+export interface GradeBandDef {
+    band: GradeBand;
+    label: string;
+    minGrade: number; // inclusive lower bound (decimal)
+    maxGrade: number; // exclusive upper bound
+    color: string;
+}
+
+export const GRADE_BANDS: GradeBandDef[] = [
+    { band: 'steep_up', label: 'Steep up', minGrade: 0.04, maxGrade: 1, color: '#dc2626' },
+    { band: 'up', label: 'Uphill', minGrade: 0.02, maxGrade: 0.04, color: '#f59e0b' },
+    { band: 'flat', label: 'Flat', minGrade: -0.02, maxGrade: 0.02, color: '#3b82f6' },
+    { band: 'down', label: 'Downhill', minGrade: -0.04, maxGrade: -0.02, color: '#10b981' },
+    { band: 'steep_down', label: 'Steep down', minGrade: -1, maxGrade: -0.04, color: '#059669' },
+];
+
+export function gradeBandFor(grade: number): GradeBand {
+    if (grade >= 0.04) return 'steep_up';
+    if (grade >= 0.02) return 'up';
+    if (grade >= -0.02) return 'flat';
+    if (grade >= -0.04) return 'down';
+    return 'steep_down';
+}
+
+export interface ElevationZoneStats {
+    band: GradeBand;
+    label: string;
+    color: string;
+    distanceMeters: number;
+    durationSec: number;
+    durationFormatted: string;
+    percentage: number; // 0..100, by distance
+}
+
+export interface ElevationAnalysis {
+    available: boolean;
+    reason?: string;
+    hasAltitude: boolean;
+    totalElevationGain: number; // m
+    totalElevationLoss: number; // m
+    avgGrade: number; // decimal, weighted by distance
+    actualAvgPace: number; // sec/km
+    gapAvgPace: number; // sec/km — flat-equivalent
+    gapPaceFormatted: string;
+    actualPaceFormatted: string;
+    paceDelta: number; // sec/km, positive = uphill cost / negative = downhill benefit
+    zones: ElevationZoneStats[];
+    hillDifficulty: 'flat' | 'easy' | 'moderate' | 'challenging' | 'brutal';
+    hillScore: number; // simple composite score
+    hillMessage: string;
+}
+
+const FLAT_BAND_DIST_THRESHOLD = 10; // m — ignore sub-10m samples (GPS noise)
+const MIN_DISTANCE_FOR_GAP = 0.3; // km — too short → GAP meaningless
+
+/**
+ * Per-sample GAP pace series (for charting) and zone breakdown.
+ *
+ * Grade is computed between consecutive stream points using altitude and
+ * horizontal distance. We do not use total distance (which would dilute
+ * vertical gain) — only the horizontal projection:
+ *   horizDist = sqrt(totalDist² - elevDelta²)
+ *   grade     = elevDelta / horizDist
+ */
+export function calculateElevationAnalysis(
+    stream: ActivityStream,
+): ElevationAnalysis {
+    const empty: ElevationAnalysis = {
+        available: false,
+        reason: '',
+        hasAltitude: false,
+        totalElevationGain: 0,
+        totalElevationLoss: 0,
+        avgGrade: 0,
+        actualAvgPace: 0,
+        gapAvgPace: 0,
+        gapPaceFormatted: '',
+        actualPaceFormatted: '',
+        paceDelta: 0,
+        zones: [],
+        hillDifficulty: 'flat',
+        hillScore: 0,
+        hillMessage: '',
+    };
+
+    if (!stream.distance || stream.distance.length < 2) {
+        return { ...empty, reason: 'No distance data in this activity.' };
+    }
+    if (!stream.time || stream.time.length < 2) {
+        return { ...empty, reason: 'No time data in this activity.' };
+    }
+
+    const totalDist = stream.distance[stream.distance.length - 1] || 0;
+    if (totalDist < MIN_DISTANCE_FOR_GAP * 1000) {
+        return {
+            ...empty,
+            reason: `Activity is shorter than ${MIN_DISTANCE_FOR_GAP} km — GAP analysis not meaningful.`,
+        };
+    }
+
+    const hasAltitude =
+        !!stream.altitude && stream.altitude.some((a) => a != null);
+    if (!hasAltitude) {
+        return {
+            ...empty,
+            reason:
+                'No altitude stream — cannot compute grade-adjusted pace. (Connect a GPS watch with barometric altimeter for hill analysis.)',
+            hasAltitude: false,
+        };
+    }
+
+    const len = Math.min(
+        stream.distance.length,
+        stream.time.length,
+        stream.altitude!.length,
+    );
+
+    let elevGain = 0;
+    let elevLoss = 0;
+    let gradeWeightedByHorizDist = 0;
+    let totalHorizDist = 0;
+
+    // Zone accumulators
+    const zoneAcc: Record<
+        GradeBand,
+        { distance: number; duration: number }
+    > = {
+        steep_up: { distance: 0, duration: 0 },
+        up: { distance: 0, duration: 0 },
+        flat: { distance: 0, duration: 0 },
+        down: { distance: 0, duration: 0 },
+        steep_down: { distance: 0, duration: 0 },
+    };
+
+    let gapDistWeighted = 0; // sum(pace_gap * dist) → divide by total → GAP pace
+    let actualDistWeighted = 0;
+
+    for (let i = 0; i < len - 1; i++) {
+        const dStart = stream.distance[i] || 0;
+        const dEnd = stream.distance[i + 1] || 0;
+        const tStart = stream.time[i] || 0;
+        const tEnd = stream.time[i + 1] || 0;
+        const aStart = stream.altitude![i];
+        const aEnd = stream.altitude![i + 1];
+
+        const totalStep = dEnd - dStart;
+        const dt = tEnd - tStart;
+        if (totalStep <= 0 || dt <= 0) continue;
+        if (totalStep < 0.5) continue; // sub-half-metre samples are noise
+
+        if (aStart == null || aEnd == null) continue;
+        const elevDelta = aEnd - aStart;
+        const horizDist = Math.sqrt(
+            Math.max(0, totalStep * totalStep - elevDelta * elevDelta),
+        );
+        if (horizDist < FLAT_BAND_DIST_THRESHOLD / 1000) continue;
+
+        const grade = elevDelta / horizDist;
+        // Clamp pathological grades (GPS noise can produce huge values on
+        // tiny vertical wiggles). Real-world running tops out around ±30%.
+        const clampedGrade = Math.max(-0.5, Math.min(0.5, grade));
+
+        if (elevDelta > 0) elevGain += elevDelta;
+        else elevLoss += -elevDelta;
+
+        gradeWeightedByHorizDist += clampedGrade * horizDist;
+        totalHorizDist += horizDist;
+
+        const band = gradeBandFor(clampedGrade);
+        zoneAcc[band].distance += horizDist;
+        zoneAcc[band].duration += dt;
+
+        const actualPace = (dt / horizDist) * 1000; // sec/km
+        const cost = minettiCostPerKgPerMeter(clampedGrade);
+        const gapPace = actualPace * (cost / FLAT_COST);
+
+        gapDistWeighted += gapPace * horizDist;
+        actualDistWeighted += actualPace * horizDist;
+    }
+
+    if (totalHorizDist <= 0) {
+        return {
+            ...empty,
+            reason:
+                'Could not derive grade samples — altitude stream may be flat-lined or too coarse.',
+            hasAltitude: true,
+        };
+    }
+
+    const avgGrade = gradeWeightedByHorizDist / totalHorizDist;
+    const actualAvgPace = actualDistWeighted / totalHorizDist;
+    const gapAvgPace = gapDistWeighted / totalHorizDist;
+
+    const zones: ElevationZoneStats[] = GRADE_BANDS.map((b) => {
+        const acc = zoneAcc[b.band];
+        return {
+            band: b.band,
+            label: b.label,
+            color: b.color,
+            distanceMeters: acc.distance,
+            durationSec: acc.duration,
+            durationFormatted: secondsToTimeString(acc.duration),
+            percentage:
+                totalHorizDist > 0 ? (acc.distance / totalHorizDist) * 100 : 0,
+        };
+    });
+
+    // Hill difficulty — composite of elevation gain per km and avg grade.
+    // Score: (elev_gain_m / dist_km) * 10 + |avg_grade_pct| * 2
+    //   0     → flat
+    //   <15   → easy
+    //   <35   → moderate
+    //   <60   → challenging
+    //   ≥60   → brutal
+    const distKm = totalHorizDist / 1000;
+    const elevGainPerKm = elevGain / distKm;
+    const hillScore = elevGainPerKm * 10 + Math.abs(avgGrade) * 100 * 2;
+
+    let hillDifficulty: ElevationAnalysis['hillDifficulty'];
+    let hillMessage: string;
+    if (hillScore < 5) {
+        hillDifficulty = 'flat';
+        hillMessage = 'Flat course. Pure pace comparison.';
+    } else if (hillScore < 15) {
+        hillDifficulty = 'easy';
+        hillMessage = 'Mild rolling terrain. Negligible hill cost.';
+    } else if (hillScore < 35) {
+        hillDifficulty = 'moderate';
+        hillMessage = 'Moderate hills. Use GAP to compare efforts across runs.';
+    } else if (hillScore < 60) {
+        hillDifficulty = 'challenging';
+        hillMessage = 'Challenging hills. Strong leg strength required.';
+    } else {
+        hillDifficulty = 'brutal';
+        hillMessage = 'Brutal climbing. Trail-runner territory.';
+    }
+
+    return {
+        available: true,
+        hasAltitude: true,
+        totalElevationGain: Math.round(elevGain),
+        totalElevationLoss: Math.round(elevLoss),
+        avgGrade,
+        actualAvgPace,
+        gapAvgPace,
+        gapPaceFormatted: formatPace(gapAvgPace),
+        actualPaceFormatted: formatPace(actualAvgPace),
+        paceDelta: gapAvgPace - actualAvgPace,
+        zones,
+        hillDifficulty,
+        hillScore,
+        hillMessage,
+    };
 }
 
 // ============== CADENCE-PACE CORRELATION ==============
