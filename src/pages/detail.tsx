@@ -15,6 +15,8 @@ import CadencePaceScatter from '@/components/Detail/CadencePaceScatter';
 import HRRecovery from '@/components/Detail/HRRecovery';
 import VO2maxEstimate from '@/components/Detail/VO2maxEstimate';
 import ElevationAnalysis from '@/components/Detail/ElevationAnalysis';
+import PerformanceEstimates from '@/components/Detail/PerformanceEstimates';
+import HRZoneDistribution from '@/components/Detail/HRZoneDistribution';
 import type { ActivityStream } from '@/utils/activityAnalytics';
 
 function LoadingSkeleton() {
@@ -135,6 +137,10 @@ export default function DetailPage() {
           <section id="vo2max-estimate">
             <VO2maxEstimate stream={stream} />
           </section>
+
+          <section id="hr-zone-distribution">
+            <HRZoneDistribution stream={stream} maxHR={maxHR} />
+          </section>
         </div>
 
         {/* Right Column — Cadence + Pace Zone + Extra */}
@@ -153,6 +159,10 @@ export default function DetailPage() {
 
           <section id="elevation-analysis">
             <ElevationAnalysis stream={stream} />
+          </section>
+
+          <section id="performance-estimates">
+            <PerformanceEstimates stream={stream} />
           </section>
         </div>
       </div>
