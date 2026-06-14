@@ -2407,3 +2407,754 @@ export function classifyWorkout(
     };
 }
 
+// ============== TRAINING LOAD (TRIMP) ==============
+
+export type TrainingLoadBand =
+    | 'recovery'
+    | 'light'
+    | 'moderate'
+    | 'hard'
+    | 'very_hard';
+
+export interface TrainingLoadData {
+    available: boolean;
+    reason?: string;
+    trimp: number; // Banister TRIMP score
+    avgHR: number | null;
+    maxHRUsed: number;
+    restHRUsed: number;
+    durationMin: number;
+    band: TrainingLoadBand;
+    bandLabel: string;
+    bandColor: string;
+    message: string;
+    /** Approximate recovery hours until next hard session (very rough). */
+    recoveryHours: number;
+}
+
+const TRIMP_BANDS: Record<
+    TrainingLoadBand,
+    { label: string; color: string; min: number; recoveryHrs: number }
+> = {
+    recovery: {
+        label: 'Recovery',
+        color: '#10b981',
+        min: 0,
+        recoveryHrs: 8,
+    },
+    light: { label: 'Light', color: '#3b82f6', min: 50, recoveryHrs: 18 },
+    moderate: { label: 'Moderate', color: '#f59e0b', min: 100, recoveryHrs: 28 },
+    hard: { label: 'Hard', color: '#f97316', min: 200, recoveryHrs: 42 },
+    very_hard: { label: 'Very Hard', color: '#ef4444', min: 300, recoveryHrs: 60 },
+};
+
+/**
+ * Banister TRIMP (Training Impulse) — single-activity training load.
+ *
+ *   TRIMP = D × HR_ratio × exp(b × HR_ratio)
+ *   HR_ratio = (avg_HR − rest_HR) / (max_HR − rest_HR)
+ *
+ * b = 1.92 for males, 1.67 for females. We default to 1.92 (the more
+ * common reference) — could be lifted to a user pref later.
+ *
+ * Rough band guides (for a trained amateur runner, single session):
+ *   <50   recovery   (active recovery / shake-out)
+ *   50–100 light     (easy / short run)
+ *   100–200 moderate (long run / steady aerobic)
+ *   200–300 hard     (tempo / threshold session)
+ *   300+   very hard (long race / big interval day)
+ *
+ * Limitations: this is *just* the single-activity TRIMP. Real CTL/ATL
+ * (chronic / acute training load) needs a windowed view across many
+ * activities — out of scope for the single-activity page.
+ */
+export function calculateTRIMP(
+    stream: ActivityStream,
+    maxHR: number = 180,
+    restHR: number = 60,
+): TrainingLoadData {
+    if (!stream.heartrate || stream.heartrate.length === 0) {
+        return {
+            available: false,
+            reason: 'No heart rate data — TRIMP requires HR stream.',
+            trimp: 0,
+            avgHR: null,
+            maxHRUsed: maxHR,
+            restHRUsed: restHR,
+            durationMin: 0,
+            band: 'recovery',
+            bandLabel: 'N/A',
+            bandColor: '#6b7280',
+            message: '',
+            recoveryHours: 0,
+        };
+    }
+    if (maxHR <= restHR) {
+        return {
+            available: false,
+            reason: 'maxHR must be greater than restHR to compute TRIMP.',
+            trimp: 0,
+            avgHR: null,
+            maxHRUsed: maxHR,
+            restHRUsed: restHR,
+            durationMin: 0,
+            band: 'recovery',
+            bandLabel: 'N/A',
+            bandColor: '#6b7280',
+            message: '',
+            recoveryHours: 0,
+        };
+    }
+
+    const totalTime = stream.time[stream.time.length - 1] || 0;
+    const durationMin = totalTime / 60;
+    if (durationMin < 1) {
+        return {
+            available: false,
+            reason: 'Run is too short to compute meaningful TRIMP.',
+            trimp: 0,
+            avgHR: null,
+            maxHRUsed: maxHR,
+            restHRUsed: restHR,
+            durationMin,
+            band: 'recovery',
+            bandLabel: 'N/A',
+            bandColor: '#6b7280',
+            message: '',
+            recoveryHours: 0,
+        };
+    }
+
+    let hrSum = 0;
+    let hrCount = 0;
+    for (const hr of stream.heartrate) {
+        if (hr != null) {
+            hrSum += hr;
+            hrCount++;
+        }
+    }
+    if (hrCount === 0) {
+        return {
+            available: false,
+            reason: 'All HR samples are null.',
+            trimp: 0,
+            avgHR: null,
+            maxHRUsed: maxHR,
+            restHRUsed: restHR,
+            durationMin,
+            band: 'recovery',
+            bandLabel: 'N/A',
+            bandColor: '#6b7280',
+            message: '',
+            recoveryHours: 0,
+        };
+    }
+    const avgHR = hrSum / hrCount;
+    const hrRatio = (avgHR - restHR) / (maxHR - restHR);
+    const clampedRatio = Math.max(0, Math.min(1.4, hrRatio));
+    const b = 1.92;
+    const trimp = durationMin * clampedRatio * Math.exp(b * clampedRatio);
+
+    let band: TrainingLoadBand = 'recovery';
+    if (trimp >= 300) band = 'very_hard';
+    else if (trimp >= 200) band = 'hard';
+    else if (trimp >= 100) band = 'moderate';
+    else if (trimp >= 50) band = 'light';
+    const meta = TRIMP_BANDS[band];
+
+    const message =
+        band === 'very_hard'
+          ? 'Significant load — schedule a full rest day before the next hard session.'
+          : band === 'hard'
+            ? 'Hard session — easy day tomorrow is recommended.'
+            : band === 'moderate'
+              ? 'Solid aerobic load. Fits into a normal training week.'
+              : band === 'light'
+                ? 'Light aerobic work. Counts toward weekly volume but not stressful.'
+                : 'Recovery-level effort. Easy to recover from.';
+
+    return {
+        available: true,
+        trimp: Math.round(trimp),
+        avgHR: Math.round(avgHR),
+        maxHRUsed: maxHR,
+        restHRUsed: restHR,
+        durationMin,
+        band,
+        bandLabel: meta.label,
+        bandColor: meta.color,
+        message,
+        recoveryHours: meta.recoveryHrs,
+    };
+}
+
+// ============== NEGATIVE SPLIT DETECTION ==============
+
+export type SplitPattern = 'negative' | 'even' | 'positive' | 'unclassified';
+
+export interface SplitHalf {
+    label: string;
+    distanceKm: number;
+    durationSec: number;
+    durationFormatted: string;
+    avgPace: number; // sec/km
+    paceFormatted: string;
+    avgHR: number | null;
+}
+export interface SplitAnalysis {
+    available: boolean;
+    reason?: string;
+    firstHalf: SplitHalf | null;
+    secondHalf: SplitHalf | null;
+    paceDelta: number; // sec/km — positive = slowed down (positive split), negative = sped up (negative split)
+    paceDeltaPct: number; // percentage — negative = negative split
+    pattern: SplitPattern;
+    label: string;
+    color: string;
+    message: string;
+    /** True when the 2nd half is ≥2% faster than the 1st. */
+    isNegative: boolean;
+}
+
+const NEGATIVE_SPLIT_THRESHOLD_PCT = 2; // ≥2% faster in 2nd half
+const POSITIVE_SPLIT_THRESHOLD_PCT = 2; // ≥2% slower in 2nd half
+
+/**
+ * Detects whether the run was a negative, even, or positive split.
+ * Splits the activity into 2 equal halves by distance, then compares
+ * average pace of each half.
+ *
+ * Negative splits (2nd half faster) are the gold standard for races:
+ * you start conservatively and finish strong, sparing glycogen for the
+ * back end. Positive splits (slowing down) usually mean going out too
+ * hard or fading.
+ */
+export function detectNegativeSplit(
+    stream: ActivityStream,
+): SplitAnalysis {
+    if (!stream.distance || !stream.time || stream.distance.length < 2) {
+        return {
+            available: false,
+            reason: 'No distance/time stream.',
+            firstHalf: null,
+            secondHalf: null,
+            paceDelta: 0,
+            paceDeltaPct: 0,
+            pattern: 'unclassified',
+            label: 'N/A',
+            color: '#6b7280',
+            message: '',
+            isNegative: false,
+        };
+    }
+    const totalDist = stream.distance[stream.distance.length - 1] || 0;
+    if (totalDist < 2000) {
+        return {
+            available: false,
+            reason: 'Run is shorter than 2 km — splits are not meaningful.',
+            firstHalf: null,
+            secondHalf: null,
+            paceDelta: 0,
+            paceDeltaPct: 0,
+            pattern: 'unclassified',
+            label: 'N/A',
+            color: '#6b7280',
+            message: '',
+            isNegative: false,
+        };
+    }
+    const halfDist = totalDist / 2;
+
+    const findIdx = (target: number): number => {
+        for (let i = 0; i < stream.distance.length; i++) {
+            if ((stream.distance[i] || 0) >= target) return i;
+        }
+        return stream.distance.length - 1;
+    };
+    const midIdx = findIdx(halfDist);
+
+    const halfFromTo = (startIdx: number, endIdx: number, label: string): SplitHalf => {
+        const dStart = stream.distance[startIdx] || 0;
+        const dEnd = stream.distance[endIdx] || 0;
+        const tStart = stream.time[startIdx] || 0;
+        const tEnd = stream.time[endIdx] || 0;
+        const dist = dEnd - dStart;
+        const dur = tEnd - tStart;
+        const pace = dist > 0 && dur > 0 ? (dur / dist) * 1000 : 0;
+        let hrSum = 0;
+        let hrCount = 0;
+        if (stream.heartrate) {
+            for (let i = startIdx; i <= endIdx; i++) {
+                const hr = stream.heartrate[i];
+                if (hr != null) {
+                    hrSum += hr;
+                    hrCount++;
+                }
+            }
+        }
+        return {
+            label,
+            distanceKm: dist / 1000,
+            durationSec: dur,
+            durationFormatted: secondsToTimeString(dur),
+            avgPace: pace,
+            paceFormatted: formatPace(pace),
+            avgHR: hrCount > 0 ? Math.round(hrSum / hrCount) : null,
+        };
+    };
+
+    const first = halfFromTo(0, midIdx, '1st half');
+    const second = halfFromTo(midIdx, stream.distance.length - 1, '2nd half');
+    const paceDelta = second.avgPace - first.avgPace; // +ve = slowed, -ve = sped up
+    const paceDeltaPct =
+        first.avgPace > 0 ? (paceDelta / first.avgPace) * 100 : 0;
+
+    let pattern: SplitPattern;
+    let label: string;
+    let color: string;
+    let message: string;
+    if (paceDeltaPct <= -NEGATIVE_SPLIT_THRESHOLD_PCT) {
+        pattern = 'negative';
+        label = 'Negative Split';
+        color = '#10b981';
+        message = `2nd half was ${Math.abs(paceDeltaPct).toFixed(1)}% faster than the 1st — textbook pacing. Spares glycogen for the finish.`;
+    } else if (
+        paceDeltaPct >= POSITIVE_SPLIT_THRESHOLD_PCT
+    ) {
+        pattern = 'positive';
+        label = 'Positive Split';
+        color = '#f59e0b';
+        message = `2nd half was ${paceDeltaPct.toFixed(1)}% slower than the 1st — typical fading pattern. Consider a more conservative start next time.`;
+    } else if (paceDeltaPct < 0) {
+        pattern = 'negative';
+        label = 'Slight Negative';
+        color = '#10b981';
+        message = `Slight negative bias (${Math.abs(paceDeltaPct).toFixed(1)}% faster in 2nd half). Almost even — very controlled pacing.`;
+    } else {
+        pattern = 'even';
+        label = 'Even Split';
+        color = '#3b82f6';
+        message = `2nd half pace matched the 1st (Δ ${paceDeltaPct.toFixed(1)}%). Steady, controlled effort.`;
+    }
+
+    return {
+        available: true,
+        firstHalf: first,
+        secondHalf: second,
+        paceDelta,
+        paceDeltaPct,
+        pattern,
+        label,
+        color,
+        message,
+        isNegative: pattern === 'negative',
+    };
+}
+
+// ============== STRIDE LENGTH ANALYSIS ==============
+
+export interface StrideSample {
+    distanceM: number; // horizontal meters over this sample
+    durationSec: number;
+    cadenceSpm: number; // true SPM (already doubled if Garmin)
+    paceSecPerKm: number;
+    strideLengthM: number;
+}
+
+export interface StrideAnalysis {
+    available: boolean;
+    reason?: string;
+    samples: number;
+    avgStrideLengthM: number;
+    minStrideLengthM: number;
+    maxStrideLengthM: number;
+    strideVariabilityPct: number; // coefficient of variation
+    /** Sample-level correlation between pace and stride length. */
+    paceStrideCorrelation: number | null;
+    /** Slopes from linear regression (stride gain per 1 sec/km faster). */
+    stridePerPaceSec: number | null; // m per (sec/km) — positive
+    message: string;
+}
+
+/**
+ * Per-sample stride length = horizontal_distance / steps, where
+ *   steps = (cadence_spm / 60) * duration_sec
+ *
+ * Cadence is converted from the half-SPM Garmin convention to true SPM
+ * inside the loop. Stride is only meaningful when running, so we filter
+ * out:
+ *   - very slow samples (pace > 12 min/km, i.e. walking / standing)
+ *   - very low cadence (pauses)
+ *   - sub-half-metre samples (GPS noise)
+ */
+export function analyzeStrideLength(stream: ActivityStream): StrideAnalysis {
+    const empty: StrideAnalysis = {
+        available: false,
+        reason: '',
+        samples: 0,
+        avgStrideLengthM: 0,
+        minStrideLengthM: 0,
+        maxStrideLengthM: 0,
+        strideVariabilityPct: 0,
+        paceStrideCorrelation: null,
+        stridePerPaceSec: null,
+        message: '',
+    };
+
+    if (!stream.cadence || stream.cadence.length === 0) {
+        return {
+            ...empty,
+            reason: 'No cadence data — stride length requires a cadence stream.',
+        };
+    }
+    if (!stream.distance || !stream.time || stream.distance.length < 2) {
+        return { ...empty, reason: 'No distance/time stream.' };
+    }
+
+    const len = Math.min(
+        stream.distance.length,
+        stream.time.length,
+        stream.cadence.length,
+    );
+
+    const samples: StrideSample[] = [];
+    for (let i = 0; i < len - 1; i++) {
+        const d = (stream.distance[i + 1] || 0) - (stream.distance[i] || 0);
+        const t = (stream.time[i + 1] || 0) - (stream.time[i] || 0);
+        const rawCadence = stream.cadence[i];
+        if (rawCadence == null) continue;
+        if (d < 0.5 || t <= 0) continue;
+
+        const cadenceSpm = rawCadence * 2; // Garmin half-SPM → SPM
+        if (cadenceSpm < 130) continue; // walking or pause
+        if (cadenceSpm > 220) continue; // clearly invalid
+
+        const pace = (t / d) * 1000;
+        if (pace < 180 || pace > 720) continue; // 3:00 – 12:00/km
+        if (pace > 600) continue; // exclude walking
+
+        const steps = (cadenceSpm / 60) * t;
+        if (steps <= 0) continue;
+        const stride = d / steps;
+        if (stride < 0.4 || stride > 3.5) continue; // sanity bounds
+
+        samples.push({
+            distanceM: d,
+            durationSec: t,
+            cadenceSpm,
+            paceSecPerKm: pace,
+            strideLengthM: stride,
+        });
+    }
+
+    if (samples.length < 4) {
+        return {
+            ...empty,
+            reason: `Only ${samples.length} valid stride samples — need at least 4 for an analysis.`,
+        };
+    }
+
+    const strides = samples.map((s) => s.strideLengthM);
+    const avg = strides.reduce((a, b) => a + b, 0) / strides.length;
+    const min = Math.min(...strides);
+    const max = Math.max(...strides);
+    const variance =
+        strides.reduce((sum, s) => sum + (s - avg) * (s - avg), 0) /
+        strides.length;
+    const stdDev = Math.sqrt(variance);
+    const variabilityPct = avg > 0 ? (stdDev / avg) * 100 : 0;
+
+    // Pearson correlation between pace and stride
+    let correlation: number | null = null;
+    let slope: number | null = null;
+    {
+        const xs = samples.map((s) => s.paceSecPerKm);
+        const ys = samples.map((s) => s.strideLengthM);
+        const meanX = xs.reduce((a, b) => a + b, 0) / xs.length;
+        const meanY = ys.reduce((a, b) => a + b, 0) / ys.length;
+        let num = 0;
+        let denomX = 0;
+        let denomY = 0;
+        for (let i = 0; i < xs.length; i++) {
+            const dx = xs[i] - meanX;
+            const dy = ys[i] - meanY;
+            num += dx * dy;
+            denomX += dx * dx;
+            denomY += dy * dy;
+        }
+        const denom = Math.sqrt(denomX * denomY);
+        if (denom > 0) correlation = num / denom;
+        // Regression slope: dy/dx
+        if (denomX > 0) slope = num / denomX;
+    }
+
+    // Reasonable human ranges: 0.7–1.4 m for distance runners
+    const qualityNote =
+        avg < 0.7
+            ? 'Short strides — could indicate a tight or fatigued gait.'
+            : avg > 1.4
+              ? 'Long, powerful strides — typical of a trained distance runner.'
+              : 'Stride length is in a typical recreational range.';
+
+    return {
+        available: true,
+        samples: samples.length,
+        avgStrideLengthM: avg,
+        minStrideLengthM: min,
+        maxStrideLengthM: max,
+        strideVariabilityPct: variabilityPct,
+        paceStrideCorrelation: correlation,
+        stridePerPaceSec: slope,
+        message: qualityNote,
+    };
+}
+
+// ============== LACTATE THRESHOLD AUTO-DETECT ==============
+
+export type LTMethod = 'fastest_30min' | 'fastest_20min' | 'hr_inflection' | 'unavailable';
+
+export interface LactateThreshold {
+    available: boolean;
+    reason?: string;
+    method: LTMethod;
+    methodLabel: string;
+    ltPaceSecPerKm: number | null;
+    ltPaceFormatted: string;
+    ltHR: number | null;
+    ltHRPercent: number | null;
+    /** % of vVO2max — i.e. velocity at LT relative to estimated VO2max velocity. */
+    velocityAtLT: number | null;
+    confidence: number; // 0–1
+    message: string;
+}
+
+/**
+ * Estimates lactate threshold (LT) — the pace above which lactate
+ * accumulates faster than clearance.
+ *
+ * We try methods in order of reliability, picking the first one with
+ * enough data:
+ *
+ *   1. **Fastest sustained 30-min effort** — Daniels' canonical method.
+ *      LT pace ≈ the pace you can hold for ~60 min in a steady state,
+ *      which roughly corresponds to a 30-min all-out effort.
+ *   2. **Fastest sustained 20-min effort** — fallback for shorter runs
+ *      (20 min is a bit hot, so we discount the result by 0.97 — the
+ *      empirical Riegel-ish correction).
+ *   3. **HR inflection** — the pace at which HR sits at ~88% of maxHR
+ *      for at least 5 sustained minutes. Useful for runs without
+ *      race-pace efforts but enough tempo work.
+ */
+export function detectLactateThreshold(
+    stream: ActivityStream,
+    maxHR: number = 180,
+): LactateThreshold {
+    if (!stream.distance || !stream.time || stream.distance.length < 2) {
+        return {
+            available: false,
+            reason: 'No distance/time stream.',
+            method: 'unavailable',
+            methodLabel: 'N/A',
+            ltPaceSecPerKm: null,
+            ltPaceFormatted: '',
+            ltHR: null,
+            ltHRPercent: null,
+            velocityAtLT: null,
+            confidence: 0,
+            message: '',
+        };
+    }
+
+    const totalTime = stream.time[stream.time.length - 1] || 0;
+
+    const slidingWindowFastest = (windowSec: number): { timeSec: number; startIdx: number; endIdx: number } | null => {
+        let bestTime = Infinity;
+        let bestStart = 0;
+        let bestEnd = 0;
+        let j = 0;
+        for (let i = 0; i < stream.time.length; i++) {
+            const tStart = stream.time[i] || 0;
+            while (
+                j < stream.time.length &&
+                (stream.time[j] || 0) - tStart < windowSec
+            ) {
+                j++;
+            }
+            if (j >= stream.time.length) break;
+            const tEnd = stream.time[j] || 0;
+            const dStart = stream.distance[i] || 0;
+            const dEnd = stream.distance[j] || 0;
+            const dist = dEnd - dStart;
+            const dt = tEnd - tStart;
+            if (dist > 0 && dt > 0 && dt < bestTime) {
+                bestTime = dt;
+                bestStart = i;
+                bestEnd = j;
+            }
+        }
+        return bestTime === Infinity ? null : { timeSec: bestTime, startIdx: bestStart, endIdx: bestEnd };
+    };
+
+    let chosen: LactateThreshold = {
+        available: false,
+        reason: '',
+        method: 'unavailable',
+        methodLabel: 'N/A',
+        ltPaceSecPerKm: null,
+        ltPaceFormatted: '',
+        ltHR: null,
+        ltHRPercent: null,
+        velocityAtLT: null,
+        confidence: 0,
+        message: '',
+    };
+
+    // Method 1: 30-min window
+    if (totalTime >= 30 * 60) {
+        const w = slidingWindowFastest(30 * 60);
+        if (w) {
+            const dStart = stream.distance[w.startIdx] || 0;
+            const dEnd = stream.distance[w.endIdx] || 0;
+            const dist = dEnd - dStart;
+            if (dist > 0) {
+                const pace = (w.timeSec / dist) * 1000;
+                // Avg HR inside the window
+                let hrSum = 0;
+                let hrCount = 0;
+                if (stream.heartrate) {
+                    for (let i = w.startIdx; i <= w.endIdx; i++) {
+                        const hr = stream.heartrate[i];
+                        if (hr != null) {
+                            hrSum += hr;
+                            hrCount++;
+                        }
+                    }
+                }
+                const ltHR = hrCount > 0 ? Math.round(hrSum / hrCount) : null;
+                chosen = {
+                    available: true,
+                    method: 'fastest_30min',
+                    methodLabel: '30-min sustained effort',
+                    ltPaceSecPerKm: pace,
+                    ltPaceFormatted: formatPace(pace),
+                    ltHR,
+                    ltHRPercent:
+                        ltHR != null ? (ltHR / maxHR) * 100 : null,
+                    velocityAtLT: 1000 / pace,
+                    confidence: 0.85,
+                    message:
+                        'Estimated from your fastest sustained 30-min effort — the standard Daniels method.',
+                };
+            }
+        }
+    }
+
+    // Method 2: 20-min window (shorter runs)
+    if (!chosen.available && totalTime >= 20 * 60) {
+        const w = slidingWindowFastest(20 * 60);
+        if (w) {
+            const dStart = stream.distance[w.startIdx] || 0;
+            const dEnd = stream.distance[w.endIdx] || 0;
+            const dist = dEnd - dStart;
+            if (dist > 0) {
+                // Discount 20-min effort by 0.97 — short efforts are slightly
+                // hot relative to true LT pace.
+                const rawPace = (w.timeSec / dist) * 1000;
+                const pace = rawPace * 0.97;
+                let hrSum = 0;
+                let hrCount = 0;
+                if (stream.heartrate) {
+                    for (let i = w.startIdx; i <= w.endIdx; i++) {
+                        const hr = stream.heartrate[i];
+                        if (hr != null) {
+                            hrSum += hr;
+                            hrCount++;
+                        }
+                    }
+                }
+                const ltHR = hrCount > 0 ? Math.round(hrSum / hrCount) : null;
+                chosen = {
+                    available: true,
+                    method: 'fastest_20min',
+                    methodLabel: '20-min sustained effort (adjusted)',
+                    ltPaceSecPerKm: pace,
+                    ltPaceFormatted: formatPace(pace),
+                    ltHR,
+                    ltHRPercent:
+                        ltHR != null ? (ltHR / maxHR) * 100 : null,
+                    velocityAtLT: 1000 / pace,
+                    confidence: 0.7,
+                    message:
+                        'Estimated from your fastest 20-min effort and adjusted down 3% — a shorter run can only give a rough LT estimate.',
+                };
+            }
+        }
+    }
+
+    // Method 3: HR inflection (~88% of maxHR sustained for 5+ min)
+    if (!chosen.available && stream.heartrate) {
+        const targetHR = maxHR * 0.88;
+        const windowSec = 5 * 60;
+        let j = 0;
+        let bestPace = Infinity;
+        let bestAvgHR = 0;
+        for (let i = 0; i < stream.heartrate.length; i++) {
+            const tStart = stream.time[i] || 0;
+            while (
+                j < stream.heartrate.length &&
+                (stream.time[j] || 0) - tStart < windowSec
+            ) {
+                j++;
+            }
+            if (j >= stream.heartrate.length) break;
+            let sum = 0;
+            let count = 0;
+            for (let k = i; k <= j; k++) {
+                const hr = stream.heartrate[k];
+                if (hr != null) {
+                    sum += hr;
+                    count++;
+                }
+            }
+            if (count === 0) continue;
+            const avgHR = sum / count;
+            if (avgHR < targetHR) continue;
+            // Pace over the window
+            const dStart = stream.distance[i] || 0;
+            const dEnd = stream.distance[j] || 0;
+            const dist = dEnd - dStart;
+            const dt = (stream.time[j] || 0) - tStart;
+            if (dist <= 0 || dt <= 0) continue;
+            const pace = (dt / dist) * 1000;
+            if (pace < bestPace) {
+                bestPace = pace;
+                bestAvgHR = Math.round(avgHR);
+            }
+        }
+        if (bestPace !== Infinity) {
+            chosen = {
+                available: true,
+                method: 'hr_inflection',
+                methodLabel: 'HR inflection (~88% of maxHR)',
+                ltPaceSecPerKm: bestPace,
+                ltPaceFormatted: formatPace(bestPace),
+                ltHR: bestAvgHR,
+                ltHRPercent: (bestAvgHR / maxHR) * 100,
+                velocityAtLT: 1000 / bestPace,
+                confidence: 0.55,
+                message:
+                    'Estimated from the fastest 5-min window where HR sat near 88% of maxHR — only used when no race-pace effort is in the run.',
+            };
+        }
+    }
+
+    if (!chosen.available) {
+        return {
+            ...chosen,
+            reason:
+                'No sustained race-pace effort in this run, and HR stream did not show a clear inflection. Try a dedicated tempo or threshold session for a more reliable estimate.',
+        };
+    }
+    return chosen;
+}
+
