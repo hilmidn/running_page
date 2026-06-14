@@ -67,16 +67,16 @@
 @media (prefers-color-scheme: dark) {
   :root {
     /* const nike = 'rgb(224,237,94)'; */
-    --color-brand: #e0ed5e;
-    --color-secondary: #ccd94a;
-    --color-bg: var(--color-neutral-900);
+    --color-brand: #34d399; /* emerald-400 — modern, runner-coded */
+    --color-secondary: #22c55e; /* green-500 */
+    --color-bg: #09090b; /* zinc-950 — deeper than neutral-900 */
     --color-tx: var(--color-brand);
     --color-hr: var(--color-red-500);
     --color-selected: var(--color-brand);
     --color-run-date: var(--color-neutral-300);
     --color-run-table-thead: var(--color-zinc-300);
     --color-run-row-hover-background: var(--color-neutral-800);
-    --color-activity-card: var(--color-neutral-700);
+    --color-activity-card: var(--color-neutral-800);
     --svg-color-active-cell: #4dd2ff;
     --svg-special-color: #f7d02c;
     --svg-special-color2: #f56c6c;
@@ -107,16 +107,16 @@
 
 [data-theme='dark'] {
   /* const nike = 'rgb(224,237,94)'; */
-  --color-brand: #e0ed5e;
-  --color-secondary: #ccd94a;
-  --color-bg: var(--color-neutral-900);
+  --color-brand: #34d399; /* emerald-400 */
+  --color-secondary: #22c55e; /* green-500 */
+  --color-bg: #09090b; /* zinc-950 */
   --color-tx: var(--color-brand);
   --color-hr: var(--color-red-500);
   --color-selected: var(--color-brand);
   --color-run-date: var(--color-neutral-300);
   --color-run-table-thead: var(--color-zinc-300);
   --color-run-row-hover-background: var(--color-neutral-800);
-  --color-activity-card: var(--color-neutral-700);
+  --color-activity-card: var(--color-neutral-800);
   --svg-color-active-cell: #4dd2ff;
   --svg-special-color: #f7d02c;
   --svg-special-color2: #f56c6c;
