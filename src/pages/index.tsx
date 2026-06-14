@@ -456,7 +456,7 @@ const Index = () => {
               </span>
               <span className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/60 px-2.5 py-1 font-mono text-zinc-300">
                 <Flame size={12} className="text-amber-400" />
-                {activities[0]?.streak ?? 0}d streak
+                {activities[activities.length - 1]?.streak ?? 0}d streak
               </span>
             </div>
           </div>
@@ -474,7 +474,7 @@ const Index = () => {
           <KPITile
             label="Total runs"
             value={kpis.totalRuns.toString()}
-            sublabel={`since ${activities[activities.length - 1]?.start_date_local.slice(0, 4) ?? '—'}`}
+            sublabel={`since ${activities[0]?.start_date_local.slice(0, 4) ?? '—'}`}
             icon={<List size={16} />}
             accent="sky"
           />
@@ -495,19 +495,16 @@ const Index = () => {
         </section>
 
         {/* === Main grid: 2 columns (main + sidebar) === */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           {/* Main column */}
-          <main className="space-y-6">
+          <main className="min-w-0 space-y-6">
             {/* Map card */}
             <section className="overflow-hidden rounded-2xl border border-zinc-700/60 bg-zinc-900/60 shadow-lg backdrop-blur-sm">
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 bg-zinc-900/80 px-4 py-3 lg:px-5">
                 <MapPin size={14} className="text-emerald-400" />
                 <h2 className="text-sm font-semibold tracking-wide text-zinc-200 uppercase">
-                  {title || `${thisYear} Running Map`}
+                  Running Map
                 </h2>
-                <span className="ml-auto rounded-full border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[10px] font-mono text-zinc-400">
-                  {runs.length} run{runs.length !== 1 ? 's' : ''}
-                </span>
               </div>
               <RunMap
                 title={title}
