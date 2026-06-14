@@ -3201,3 +3201,303 @@ export function detectLactateThreshold(
     return chosen;
 }
 
+
+// ============== MULTI-ACTIVITY TRENDS ==============
+
+export interface WeeklyVolumePoint {
+    weekStart: string; // ISO date (Monday)
+    weekEnd: string; // ISO date (Sunday)
+    weekLabel: string; // e.g. "Jun 8–14"
+    distanceKm: number;
+    runCount: number;
+    durationSec: number;
+    durationFormatted: string;
+    elevationGainM: number;
+}
+
+/**
+ * Bucket a list of activities into ISO weeks (Monday-start) and return
+ * totals per week, sorted ascending. Last `weeksBack` weeks are kept;
+ * the first weeks in the window that have no runs are still returned
+ * (with zeros) so the chart is continuous.
+ */
+export function computeWeeklyVolume(
+    activities: Activity[],
+    weeksBack: number = 12,
+    now: Date = new Date(),
+): WeeklyVolumePoint[] {
+    // Find Monday of current week
+    const today = new Date(now);
+    const dow = today.getDay(); // 0 = Sun, 1 = Mon, ...
+    const isoDayOfWeek = dow === 0 ? 7 : dow; // ISO: 1 = Mon, 7 = Sun
+    const currentMonday = new Date(today);
+    currentMonday.setHours(0, 0, 0, 0);
+    currentMonday.setDate(today.getDate() - (isoDayOfWeek - 1));
+
+    // Build empty buckets for the last `weeksBack` weeks
+    const buckets: Record<string, WeeklyVolumePoint> = {};
+    for (let i = weeksBack - 1; i >= 0; i--) {
+        const ws = new Date(currentMonday);
+        ws.setDate(currentMonday.getDate() - i * 7);
+        const we = new Date(ws);
+        we.setDate(ws.getDate() + 6);
+        const key = ws.toISOString().slice(0, 10);
+        buckets[key] = {
+            weekStart: key,
+            weekEnd: we.toISOString().slice(0, 10),
+            weekLabel: formatWeekRange(ws, we),
+            distanceKm: 0,
+            runCount: 0,
+            durationSec: 0,
+            durationFormatted: '0:00',
+            elevationGainM: 0,
+        };
+    }
+
+    const earliest = Object.keys(buckets)[0];
+    let movingTimeTotal = 0;
+    for (const a of activities) {
+        const d = new Date(a.start_date_local);
+        if (isNaN(d.getTime())) continue;
+        // Find the Monday of the run's week
+        const runDow = d.getDay();
+        const runIso = runDow === 0 ? 7 : runDow;
+        const runMonday = new Date(d);
+        runMonday.setHours(0, 0, 0, 0);
+        runMonday.setDate(d.getDate() - (runIso - 1));
+        const key = runMonday.toISOString().slice(0, 10);
+        if (key < earliest) continue;
+        const bucket = buckets[key];
+        if (!bucket) continue;
+        bucket.distanceKm += a.distance / 1000;
+        bucket.runCount += 1;
+        bucket.elevationGainM += a.elevation_gain || 0;
+        movingTimeTotal += parseMovingTime(a.moving_time);
+    }
+
+    // Compute durationFormatted per bucket
+    for (const key of Object.keys(buckets)) {
+        buckets[key].durationFormatted = secondsToTimeString(
+            buckets[key].durationSec,
+        );
+    }
+
+    return Object.keys(buckets)
+        .sort()
+        .map((k) => buckets[k]);
+}
+
+function formatWeekRange(start: Date, end: Date): string {
+    const sameMonth = start.getMonth() === end.getMonth();
+    const fmt = (d: Date, withMonth: boolean) =>
+        d.toLocaleDateString('en-US', {
+            month: withMonth ? 'short' : undefined,
+            day: 'numeric',
+        });
+    return sameMonth
+        ? `${fmt(start, true).replace(' ', ' ')}–${end.getDate()}`
+        : `${fmt(start, true)}–${fmt(end, true)}`;
+}
+
+function parseMovingTime(movingTime: string | number): number {
+    if (typeof movingTime === 'number') return movingTime;
+    // HH:MM:SS or MM:SS
+    const parts = movingTime.split(':').map((p) => parseInt(p, 10) || 0);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return 0;
+}
+
+export interface VO2maxPoint {
+    runId: number;
+    date: string;
+    name: string;
+    vo2max: number;
+    method: 'peak' | 'avg';
+    paceAtVO2max: number; // sec/km
+    paceAtVO2maxFormatted: string;
+    distanceKm: number;
+    elevationGainM: number;
+    grade: VO2maxGrade;
+    label: string;
+}
+
+/**
+ * Compute VO2max per run in the last `weeksBack` weeks. For each run
+ * we try the peak velocity in the stream first; if no stream is
+ * available, fall back to the activity's average speed. Each entry is
+ * graded on the Daniels scale.
+ */
+export function computeVO2maxTrend(
+    activities: Activity[],
+    streamMap: Map<number, ActivityStream | null>,
+    weeksBack: number = 12,
+    now: Date = new Date(),
+): VO2maxPoint[] {
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - weeksBack * 7);
+    const out: VO2maxPoint[] = [];
+
+    for (const a of activities) {
+        const d = new Date(a.start_date_local);
+        if (isNaN(d.getTime()) || d < cutoff) continue;
+        if (!a.distance || a.distance < 500) continue; // skip <500m
+
+        const stream = streamMap.get(a.run_id);
+        let vMps: number | null = null;
+        let method: 'peak' | 'avg' = 'avg';
+
+        if (stream && stream.distance && stream.time && stream.distance.length > 1) {
+            // Best sustained 5-min avg velocity, derived from the
+            // distance / time streams (no velocity_smooth in the
+            // local ActivityStream type, so we compute it).
+            vMps = bestSustainedVelocity(stream.distance, stream.time, 300);
+            if (vMps != null) method = 'peak';
+        }
+        if (vMps == null) {
+            vMps = a.average_speed;
+        }
+        if (!vMps || vMps <= 0) continue;
+
+        const vMpm = vMps * 60;
+        const vo2 = -4.6 + 0.182258 * vMpm + 0.000104 * vMpm * vMpm;
+        const paceSecPerKm = 1000 / vMps;
+        const gradeInfo = gradeVO2max(vo2);
+
+        out.push({
+            runId: a.run_id,
+            date: a.start_date_local,
+            name: a.name,
+            vo2max: vo2,
+            method,
+            paceAtVO2max: paceSecPerKm,
+            paceAtVO2maxFormatted: formatPace(paceSecPerKm),
+            distanceKm: a.distance / 1000,
+            elevationGainM: a.elevation_gain || 0,
+            grade: gradeInfo.grade,
+            label: gradeInfo.label,
+        });
+    }
+
+    return out.sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+}
+
+function bestSustainedVelocity(
+    distance: number[],
+    time: number[],
+    windowSec: number,
+): number | null {
+    // Sliding window over (distance[i+1]-distance[i])/(time[i+1]-time[i]).
+    // Skip pairs where time doesn't advance (pause / gap).
+    const n = distance.length;
+    if (n < windowSec + 1) return null;
+    // Build per-sample velocities first
+    const v: number[] = new Array(n).fill(0);
+    let validCount = 0;
+    for (let i = 1; i < n; i++) {
+        const dt = time[i] - time[i - 1];
+        if (dt <= 0) continue;
+        const dx = distance[i] - distance[i - 1];
+        v[i] = dx / dt;
+        validCount += 1;
+    }
+    if (validCount < windowSec) return null;
+
+    let sum = 0;
+    for (let i = 1; i <= windowSec; i++) sum += v[i];
+    let best = sum / windowSec;
+    for (let i = windowSec + 1; i < n; i++) {
+        sum += v[i] - v[i - windowSec];
+        const avg = sum / windowSec;
+        if (avg > best) best = avg;
+    }
+    return best;
+}
+
+export interface HRZonePoint {
+    runId: number;
+    date: string;
+    name: string;
+    totalTimeSec: number;
+    zone1Sec: number;
+    zone2Sec: number;
+    zone3Sec: number;
+    zone4Sec: number;
+    zone5Sec: number;
+    zone1Pct: number;
+    zone2Pct: number;
+    zone3Pct: number;
+    zone4Pct: number;
+    zone5Pct: number;
+    dominantZone: number;
+    avgHR: number | null;
+    distanceKm: number;
+}
+
+/**
+ * Compute per-run time-in-zone using each activity's HR stream. The
+ * per-second zone classification uses `getHRZone(hrPercent)` so the
+ * thresholds stay in sync with the rest of the analytics.
+ */
+export function computeHRZoneTrend(
+    activities: Activity[],
+    streamMap: Map<number, ActivityStream | null>,
+    maxHR: number = 180,
+    weeksBack: number = 12,
+    now: Date = new Date(),
+): HRZonePoint[] {
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - weeksBack * 7);
+    const out: HRZonePoint[] = [];
+
+    for (const a of activities) {
+        const d = new Date(a.start_date_local);
+        if (isNaN(d.getTime()) || d < cutoff) continue;
+        const stream = streamMap.get(a.run_id);
+        if (!stream || !stream.heartrate || stream.heartrate.length === 0) {
+            continue;
+        }
+
+        const z = [0, 0, 0, 0, 0]; // 1-5
+        let hrSum = 0;
+        let hrCount = 0;
+        for (const hr of stream.heartrate) {
+            if (hr == null || hr <= 0) continue;
+            hrSum += hr;
+            hrCount += 1;
+            const pct = (hr / maxHR) * 100;
+            const zone = getHRZone(pct);
+            if (zone >= 1 && zone <= 5) z[zone - 1] += 1;
+        }
+
+        const total = z[0] + z[1] + z[2] + z[3] + z[4];
+        if (total === 0) continue;
+        const dominant = z.indexOf(Math.max(...z)) + 1;
+
+        out.push({
+            runId: a.run_id,
+            date: a.start_date_local,
+            name: a.name,
+            totalTimeSec: total,
+            zone1Sec: z[0],
+            zone2Sec: z[1],
+            zone3Sec: z[2],
+            zone4Sec: z[3],
+            zone5Sec: z[4],
+            zone1Pct: (z[0] / total) * 100,
+            zone2Pct: (z[1] / total) * 100,
+            zone3Pct: (z[2] / total) * 100,
+            zone4Pct: (z[3] / total) * 100,
+            zone5Pct: (z[4] / total) * 100,
+            dominantZone: dominant,
+            avgHR: hrCount > 0 ? Math.round(hrSum / hrCount) : null,
+            distanceKm: a.distance / 1000,
+        });
+    }
+
+    return out.sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+}
