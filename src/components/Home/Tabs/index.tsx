@@ -40,7 +40,7 @@ export default function Tabs({ tabs, defaultTabId, className = '' }: TabsProps) 
           );
         })}
       </div>
-      <div className="overflow-x-auto">{active?.content}</div>
+      <div className="overflow-x-auto p-4">{active?.content}</div>
     </div>
   );
 }
