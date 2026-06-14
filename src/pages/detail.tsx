@@ -11,6 +11,8 @@ import PaceZoneChart from '@/components/Detail/PaceZone';
 import RouteMap from '@/components/Detail/RouteMap';
 import SplitsTable from '@/components/Detail/SplitsTable';
 import CardiacDrift from '@/components/Detail/CardiacDrift';
+import CadencePaceScatter from '@/components/Detail/CadencePaceScatter';
+import HRRecovery from '@/components/Detail/HRRecovery';
 import type { ActivityStream } from '@/utils/activityAnalytics';
 
 function LoadingSkeleton() {
@@ -123,6 +125,10 @@ export default function DetailPage() {
           <section id="cardiac-drift">
             <CardiacDrift stream={stream} maxHR={maxHR} />
           </section>
+
+          <section id="hr-recovery">
+            <HRRecovery stream={stream} />
+          </section>
         </div>
 
         {/* Right Column — Cadence + Pace Zone + Extra */}
@@ -133,6 +139,10 @@ export default function DetailPage() {
 
           <section id="pace-zone-chart">
             <PaceZoneChart stream={stream} />
+          </section>
+
+          <section id="cadence-pace-scatter">
+            <CadencePaceScatter stream={stream} />
           </section>
         </div>
       </div>

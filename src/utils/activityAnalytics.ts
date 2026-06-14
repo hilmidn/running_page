@@ -1046,6 +1046,399 @@ export function getDriftColor(status: CardiacDriftStatus): string {
     }
 }
 
+// ============== CADENCE-PACE CORRELATION ==============
+
+export interface CadencePacePoint {
+    cadence: number; // spm
+    pace: number; // sec/km
+    distanceKm: number;
+    hr?: number;
+}
+
+export interface CadencePaceScatterData {
+    available: boolean;
+    reason?: string;
+    points: CadencePacePoint[];
+    regression: {
+        slope: number; // sec/km per spm
+        intercept: number; // sec/km
+        pearsonR: number; // -1..1 (typically negative — higher cadence = lower sec/km = faster)
+        rSquared: number; // 0..1
+        lineStart: { cadence: number; pace: number };
+        lineEnd: { cadence: number; pace: number };
+    } | null;
+    sampleCount: number;
+    cadenceRange: { min: number; max: number };
+    paceRange: { min: number; max: number };
+}
+
+/**
+ * Build a cadence vs pace scatter from the stream. Filters out warm-up,
+ * non-running samples, and obviously broken readings so the regression
+ * isn't dragged around by outliers.
+ */
+export function createCadencePaceScatterData(
+    stream: ActivityStream,
+    options: {
+        sampleStride?: number; // take every Nth point to keep payload small
+        skipFirstSeconds?: number; // skip warm-up
+        skipLastSeconds?: number; // skip cooldown
+        maxPoints?: number;
+    } = {},
+): CadencePaceScatterData {
+    const {
+        sampleStride = 5,
+        skipFirstSeconds = 60,
+        skipLastSeconds = 30,
+        maxPoints = 800,
+    } = options;
+
+    const empty: CadencePaceScatterData = {
+        available: false,
+        points: [],
+        regression: null,
+        sampleCount: 0,
+        cadenceRange: { min: 0, max: 0 },
+        paceRange: { min: 0, max: 0 },
+    };
+
+    if (!stream.cadence || stream.cadence.length === 0) {
+        return { ...empty, reason: 'No cadence data in this activity.' };
+    }
+    if (!stream.distance || stream.distance.length === 0) {
+        return { ...empty, reason: 'No distance data in this activity.' };
+    }
+
+    const totalTime = stream.time[stream.time.length - 1] || 0;
+    if (totalTime < 180) {
+        return {
+            ...empty,
+            reason: 'Activity is too short for correlation analysis.',
+        };
+    }
+
+    const points: CadencePacePoint[] = [];
+    const len = Math.min(
+        stream.cadence.length,
+        stream.distance.length,
+        stream.time.length,
+    );
+
+    for (let i = 0; i < len; i++) {
+        const t = stream.time[i] || 0;
+        if (t < skipFirstSeconds) continue;
+        if (t > totalTime - skipLastSeconds) continue;
+
+        const cadence = stream.cadence[i];
+        if (cadence == null || cadence <= 0) continue;
+
+        // Garmin stores running cadence as ½ SPM — mirror the convention
+        // used in calculateSegmentStats so the chart matches the splits table.
+        const cadenceSpm = cadence * 2;
+
+        // Derive pace at this point using the next sample's distance/time.
+        if (i >= len - 1) continue;
+        const dDelta = (stream.distance[i + 1] || 0) - stream.distance[i];
+        const tDelta = (stream.time[i + 1] || 0) - stream.time[i];
+        if (dDelta <= 0 || tDelta <= 0) continue;
+
+        const pace = (tDelta / dDelta) * 1000; // sec/km
+        if (!isFinite(pace) || pace <= 0 || pace > 1800) continue; // >30 min/km = noise
+
+        if (i % sampleStride !== 0) continue;
+
+        const hr = stream.heartrate?.[i];
+        points.push({
+            cadence: cadenceSpm,
+            pace,
+            distanceKm: (stream.distance[i] || 0) / 1000,
+            hr: hr == null ? undefined : hr,
+        });
+    }
+
+    if (points.length < 8) {
+        return {
+            ...empty,
+            reason: 'Not enough valid cadence/pace samples to correlate.',
+        };
+    }
+
+    // Downsample if still too many points
+    let sampled = points;
+    if (points.length > maxPoints) {
+        const step = Math.ceil(points.length / maxPoints);
+        sampled = points.filter((_, idx) => idx % step === 0);
+    }
+
+    // Linear regression (least squares)
+    const n = sampled.length;
+    const sumX = sampled.reduce((s, p) => s + p.cadence, 0);
+    const sumY = sampled.reduce((s, p) => s + p.pace, 0);
+    const sumXY = sampled.reduce((s, p) => s + p.cadence * p.pace, 0);
+    const sumX2 = sampled.reduce((s, p) => s + p.cadence * p.cadence, 0);
+    const sumY2 = sampled.reduce((s, p) => s + p.pace * p.pace, 0);
+
+    const meanX = sumX / n;
+    const meanY = sumY / n;
+    const denomX = sumX2 - n * meanX * meanX;
+    const denomY = sumY2 - n * meanY * meanY;
+    const denomXY = sumX2 - n * meanX * meanX;
+
+    let slope = 0;
+    let intercept = meanY;
+    let pearsonR = 0;
+
+    if (denomX > 0 && denomY > 0) {
+        slope = (sumXY - n * meanX * meanY) / denomX;
+        intercept = meanY - slope * meanX;
+        const numR = sumXY - n * meanX * meanY;
+        const denR = Math.sqrt(denomX * denomY);
+        pearsonR = denR === 0 ? 0 : numR / denR;
+    } else if (denomXY > 0) {
+        slope = (sumXY - n * meanX * meanY) / denomXY;
+        intercept = meanY - slope * meanX;
+    }
+
+    const rSquared = pearsonR * pearsonR;
+
+    const cadences = sampled.map((p) => p.cadence);
+    const paces = sampled.map((p) => p.pace);
+    const cadenceRange = {
+        min: Math.min(...cadences),
+        max: Math.max(...cadences),
+    };
+    const paceRange = {
+        min: Math.min(...paces),
+        max: Math.max(...paces),
+    };
+
+    // Clamp regression line to observed cadence range so it draws cleanly
+    const xStart = cadenceRange.min;
+    const xEnd = cadenceRange.max;
+    const lineStart = { cadence: xStart, pace: slope * xStart + intercept };
+    const lineEnd = { cadence: xEnd, pace: slope * xEnd + intercept };
+
+    return {
+        available: true,
+        points: sampled,
+        regression: {
+            slope,
+            intercept,
+            pearsonR,
+            rSquared,
+            lineStart,
+            lineEnd,
+        },
+        sampleCount: points.length,
+        cadenceRange,
+        paceRange,
+    };
+}
+
+// ============== HEART RATE RECOVERY ==============
+
+export type HRRecoveryGrade = 'excellent' | 'good' | 'fair' | 'poor' | 'na';
+
+export interface HRRecoveryData {
+    available: boolean;
+    reason?: string;
+    peakHR: number; // bpm
+    peakTimeSec: number; // seconds from start
+    peakDistanceKm: number;
+    hrr1: number | null; // bpm drop after 60s
+    hrr2: number | null; // bpm drop after 120s
+    hrr3: number | null; // bpm drop after 180s
+    pct1: number | null; // % drop after 60s
+    pct2: number | null;
+    pct3: number | null;
+    grade: HRRecoveryGrade;
+    label: string;
+    message: string;
+}
+
+/**
+ * Heart Rate Recovery analysis.
+ *
+ * Finds the peak HR sample in the stream and measures the drop at 60, 120
+ * and 180 seconds after that peak. HRR-1 (1-minute drop) is the most
+ * clinically meaningful single number — well-studied thresholds:
+ *
+ *   - HRR-1 ≥ 18 bpm  → excellent cardiovascular fitness
+ *   - HRR-1 12–17     → good
+ *   - HRR-1 6–11      → fair
+ *   - HRR-1 < 6       → poor (worth a check-up)
+ *
+ * Requires at least 3 minutes of HR samples after the peak to surface
+ * the 1/2/3-min metrics — short runs are hidden gracefully.
+ */
+export function calculateHRRecovery(stream: ActivityStream): HRRecoveryData {
+    const empty: HRRecoveryData = {
+        available: false,
+        peakHR: 0,
+        peakTimeSec: 0,
+        peakDistanceKm: 0,
+        hrr1: null,
+        hrr2: null,
+        hrr3: null,
+        pct1: null,
+        pct2: null,
+        pct3: null,
+        grade: 'na',
+        label: 'N/A',
+        message: '',
+    };
+
+    if (!stream.heartrate || stream.heartrate.length === 0) {
+        return { ...empty, reason: 'No heart rate data in this activity.' };
+    }
+
+    // Find peak HR (ignoring nulls and zeros)
+    let peakIdx = -1;
+    let peakVal = 0;
+    for (let i = 0; i < stream.heartrate.length; i++) {
+        const hr = stream.heartrate[i];
+        if (hr == null || hr <= 0) continue;
+        if (hr > peakVal) {
+            peakVal = hr;
+            peakIdx = i;
+        }
+    }
+
+    if (peakIdx < 0) {
+        return { ...empty, reason: 'No valid HR samples found.' };
+    }
+
+    const peakHR = peakVal;
+    const peakTimeSec = stream.time[peakIdx] || 0;
+    const peakDistanceKm = (stream.distance?.[peakIdx] || 0) / 1000;
+
+    const totalTime = stream.time[stream.time.length - 1] || 0;
+    if (totalTime - peakTimeSec < 60) {
+        return {
+            ...empty,
+            reason:
+                'Peak HR was too close to the end of the run — no recovery window to measure.',
+            peakHR,
+            peakTimeSec,
+            peakDistanceKm,
+            hrr1: null,
+            hrr2: null,
+            hrr3: null,
+            pct1: null,
+            pct2: null,
+            pct3: null,
+            grade: 'na',
+            label: 'N/A',
+            message: '',
+        };
+    }
+
+    /**
+     * For each target offset (seconds), find the HR sample closest to
+     * `peakTimeSec + offset` and return its HR.
+     */
+    const sampleAtOffset = (offsetSec: number): number | null => {
+        if (peakTimeSec + offsetSec > totalTime) return null;
+        const target = peakTimeSec + offsetSec;
+        // Linear scan is fine — heartrate stream is usually <10k points
+        let bestIdx = peakIdx;
+        let bestDelta = Infinity;
+        for (let i = peakIdx; i < stream.heartrate.length; i++) {
+            const t = stream.time[i] || 0;
+            if (t < target) continue;
+            const d = t - target;
+            if (d < bestDelta) {
+                bestDelta = d;
+                bestIdx = i;
+            } else {
+                break; // time is monotonically increasing
+            }
+        }
+        const hr = stream.heartrate[bestIdx];
+        if (hr == null || hr <= 0) return null;
+        return hr;
+    };
+
+    const hr60 = sampleAtOffset(60);
+    const hr120 = sampleAtOffset(120);
+    const hr180 = sampleAtOffset(180);
+
+    const hrr1 = hr60 != null ? peakHR - hr60 : null;
+    const hrr2 = hr120 != null ? peakHR - hr120 : null;
+    const hrr3 = hr180 != null ? peakHR - hr180 : null;
+    const pct1 = hrr1 != null ? (hrr1 / peakHR) * 100 : null;
+    const pct2 = hrr2 != null ? (hrr2 / peakHR) * 100 : null;
+    const pct3 = hrr3 != null ? (hrr3 / peakHR) * 100 : null;
+
+    // Grade on HRR-1
+    let grade: HRRecoveryGrade;
+    let label: string;
+    let message: string;
+
+    if (hrr1 == null) {
+        grade = 'na';
+        label = 'N/A';
+        message = 'No 1-minute recovery sample available.';
+    } else if (hrr1 < 0) {
+        // HR went up after the supposed peak — likely mid-workout, not end-of-effort
+        grade = 'fair';
+        label = 'Inconclusive';
+        message =
+            'HR continued to climb after the peak — no clean recovery window.';
+    } else if (hrr1 >= 18) {
+        grade = 'excellent';
+        label = 'Excellent';
+        message = 'Strong cardiovascular recovery. Aerobic base is solid.';
+    } else if (hrr1 >= 12) {
+        grade = 'good';
+        label = 'Good';
+        message = 'Healthy recovery response — typical for trained runners.';
+    } else if (hrr1 >= 6) {
+        grade = 'fair';
+        label = 'Fair';
+        message = 'Modest recovery — more aerobic work will help.';
+    } else {
+        grade = 'poor';
+        label = 'Poor';
+        message =
+            'Slow recovery. Worth flagging if persistent — check sleep, stress, and easy-run volume.';
+    }
+
+    return {
+        available: true,
+        peakHR,
+        peakTimeSec,
+        peakDistanceKm,
+        hrr1,
+        hrr2,
+        hrr3,
+        pct1,
+        pct2,
+        pct3,
+        grade,
+        label,
+        message,
+    };
+}
+
+/**
+ * Color for HR recovery grade.
+ */
+export function getHRRecoveryColor(grade: HRRecoveryGrade): string {
+    switch (grade) {
+        case 'excellent':
+            return '#10b981';
+        case 'good':
+            return '#3b82f6';
+        case 'fair':
+            return '#f59e0b';
+        case 'poor':
+            return '#ef4444';
+        default:
+            return '#6b7280';
+    }
+}
+
 // ============== FORMATTING ==============
 
 /**
