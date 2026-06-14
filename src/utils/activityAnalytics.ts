@@ -1993,3 +1993,417 @@ export function getZoneColor(zone: number): string {
     };
     return colors[zone] || '#6b7280';
 }
+
+// ============== PERSONAL BESTS & RACE PREDICTIONS ==============
+
+export interface PBCandidate {
+    /** Human-readable label, e.g. "1K", "1 mile", "5K". */
+    label: string;
+    /** Distance in meters. */
+    distanceMeters: number;
+    /** Time in seconds the runner held this distance, fastest effort. */
+    timeSec: number | null;
+    /** Average pace in sec/km. */
+    paceSecPerKm: number | null;
+    /** Stream index range [start, end] (inclusive) where this effort lives. */
+    startIdx: number | null;
+    endIdx: number | null;
+    /**
+     * True if the run is long enough to *contain* this distance; false if
+     * the candidate is too short to be assessed (we won't make a
+     * prediction from a 3-km run).
+     */
+    achievable: boolean;
+}
+
+/**
+ * Find fastest sustained efforts for a few standard distances inside a
+ * single activity. We use a sliding window and track the smallest
+ * (distance / elapsed) ratio — i.e. the fastest sustained cover.
+ *
+ * Only distances that fit *inside* the run are returned as achievable.
+ * Predictions for longer races are then derived from the best achievable
+ * segment (see `predictRaceTimes`).
+ */
+export function findPersonalBests(stream: ActivityStream): PBCandidate[] {
+    const candidates: { label: string; distance: number }[] = [
+        { label: '1K', distance: 1000 },
+        { label: '1 mile', distance: 1609.34 },
+        { label: '5K', distance: 5000 },
+        { label: '10K', distance: 10000 },
+    ];
+
+    const totalDist =
+        (stream.distance && stream.distance[stream.distance.length - 1]) || 0;
+
+    if (!stream.distance || !stream.time || stream.distance.length < 2) {
+        return candidates.map((c) => ({
+            label: c.label,
+            distanceMeters: c.distance,
+            timeSec: null,
+            paceSecPerKm: null,
+            startIdx: null,
+            endIdx: null,
+            achievable: false,
+        }));
+    }
+
+    return candidates.map((c) => {
+        const achievable = totalDist >= c.distance;
+        if (!achievable) {
+            return {
+                label: c.label,
+                distanceMeters: c.distance,
+                timeSec: null,
+                paceSecPerKm: null,
+                startIdx: null,
+                endIdx: null,
+                achievable: false,
+            };
+        }
+
+        // Sliding window: for each i, find largest j such that
+        // stream.distance[j] - stream.distance[i] >= c.distance.
+        // We want minimum (time[j] - time[i]) over all i where the
+        // window is at least c.distance wide.
+        let bestTime = Infinity;
+        let bestStart = -1;
+        let bestEnd = -1;
+        let j = 0;
+        for (let i = 0; i < stream.distance.length; i++) {
+            const dStart = stream.distance[i] || 0;
+            while (
+                j < stream.distance.length &&
+                (stream.distance[j] || 0) - dStart < c.distance
+            ) {
+                j++;
+            }
+            if (j >= stream.distance.length) break;
+            const tStart = stream.time[i] || 0;
+            const tEnd = stream.time[j] || 0;
+            const elapsed = tEnd - tStart;
+            // Allow a tiny tolerance for floating-point or sampling drift
+            const actualDist = (stream.distance[j] || 0) - dStart;
+            if (actualDist < c.distance * 0.998) continue;
+            if (elapsed > 0 && elapsed < bestTime) {
+                bestTime = elapsed;
+                bestStart = i;
+                bestEnd = j;
+            }
+        }
+
+        if (bestTime === Infinity) {
+            return {
+                label: c.label,
+                distanceMeters: c.distance,
+                timeSec: null,
+                paceSecPerKm: null,
+                startIdx: null,
+                endIdx: null,
+                achievable: false,
+            };
+        }
+
+        return {
+            label: c.label,
+            distanceMeters: c.distance,
+            timeSec: bestTime,
+            paceSecPerKm: (bestTime / c.distance) * 1000,
+            startIdx: bestStart,
+            endIdx: bestEnd,
+            achievable: true,
+        };
+    });
+}
+
+export interface RacePrediction {
+    label: string;
+    distanceMeters: number;
+    timeSec: number; // predicted, in seconds
+    paceSecPerKm: number;
+}
+
+/**
+ * Riegel's race-time formula:   T₂ = T₁ × (D₂ / D₁)^1.06
+ *
+ * Picks the longest *achieved* PR as the basis (longer efforts are
+ * more reliable predictors than short ones) and predicts every other
+ * common distance from it. Output is sorted by distance ascending.
+ *
+ * The exponent 1.06 is Riegel's 1977 value — slightly more conservative
+ * than the 1.07 used by some calculators, which biases predictions
+ * slightly *faster* for short distances. 1.06 is closer to the
+ * "expected reality" for trained amateur runners.
+ */
+export function predictRaceTimes(pbs: PBCandidate[]): RacePrediction[] {
+    const targetDistances: { label: string; meters: number }[] = [
+        { label: '1K', meters: 1000 },
+        { label: '1 mile', meters: 1609.34 },
+        { label: '5K', meters: 5000 },
+        { label: '10K', meters: 10000 },
+        { label: 'Half Marathon', meters: 21097.5 },
+        { label: 'Marathon', meters: 42195 },
+    ];
+
+    // Pick the longest achievable PR — strongest signal.
+    const achievable = pbs.filter((p) => p.achievable && p.timeSec != null);
+    if (achievable.length === 0) return [];
+    const basis = achievable.reduce((a, b) =>
+        (a.distanceMeters || 0) >= (b.distanceMeters || 0) ? a : b,
+    );
+
+    const T1 = basis.timeSec!;
+    const D1 = basis.distanceMeters;
+
+    return targetDistances
+        .map((t) => {
+            const T2 = T1 * Math.pow(t.meters / D1, 1.06);
+            return {
+                label: t.label,
+                distanceMeters: t.meters,
+                timeSec: T2,
+                paceSecPerKm: (T2 / t.meters) * 1000,
+            };
+        })
+        .sort((a, b) => a.distanceMeters - b.distanceMeters);
+}
+
+// ============== WORKOUT CLASSIFIER ==============
+
+export type WorkoutType =
+    | 'recovery'
+    | 'easy'
+    | 'long'
+    | 'tempo'
+    | 'threshold'
+    | 'intervals'
+    | 'race'
+    | 'unclassified';
+
+export interface WorkoutClassification {
+    type: WorkoutType;
+    label: string;
+    color: string;
+    message: string;
+    /** 0–1, how confident the classifier is in the call. */
+    confidence: number;
+    /** Concrete numbers that drove the decision. */
+    signals: {
+        durationMin: number;
+        avgPaceSecPerKm: number | null;
+        avgHRPercent: number | null;
+        paceVariability: number | null; // coefficient of variation
+    };
+}
+
+const WORKOUT_META: Record<
+    WorkoutType,
+    { label: string; color: string; message: string }
+> = {
+    recovery: {
+        label: 'Recovery',
+        color: '#10b981',
+        message: 'Easy-effort shake-out. Short, low HR — perfect for active recovery.',
+    },
+    easy: {
+        label: 'Easy Run',
+        color: '#3b82f6',
+        message: 'Conversational pace in Z2. The bread-and-butter of aerobic base.',
+    },
+    long: {
+        label: 'Long Run',
+        color: '#0ea5e9',
+        message: 'Extended duration at conversational pace. Builds endurance and fat oxidation.',
+    },
+    tempo: {
+        label: 'Tempo Run',
+        color: '#f59e0b',
+        message: 'Sustained comfortably-hard effort (Z3-Z4). Lactate-threshold builder.',
+    },
+    threshold: {
+        label: 'Threshold',
+        color: '#f97316',
+        message: 'Right at lactate threshold (~Z4). Specific endurance work.',
+    },
+    intervals: {
+        label: 'Intervals',
+        color: '#ef4444',
+        message: 'Repeated high-intensity bursts. VO2max and speed endurance.',
+    },
+    race: {
+        label: 'Race Effort',
+        color: '#a855f7',
+        message: 'All-out sustained effort. Treat as a benchmark, not a regular workout.',
+    },
+    unclassified: {
+        label: 'Unclassified',
+        color: '#6b7280',
+        message: 'Mixed signals — could be a workout with multiple phases.',
+    },
+};
+
+/**
+ * Heuristic workout classifier. Looks at:
+ *   - duration
+ *   - average pace
+ *   - average HR (as % of max)
+ *   - pace variability (high variability = intervals, low = steady)
+ *
+ * The decision tree is intentionally simple. Edge cases fall through to
+ * "unclassified" with a hint about why.
+ */
+export function classifyWorkout(
+    stream: ActivityStream,
+    maxHR: number = 180,
+): WorkoutClassification {
+    const emptySignals = {
+        durationMin: 0,
+        avgPaceSecPerKm: null as number | null,
+        avgHRPercent: null as number | null,
+        paceVariability: null as number | null,
+    };
+    if (!stream.distance || !stream.time || stream.distance.length < 2) {
+        return {
+            type: 'unclassified',
+            ...WORKOUT_META.unclassified,
+            confidence: 0,
+            signals: emptySignals,
+        };
+    }
+
+    const totalDist = stream.distance[stream.distance.length - 1] || 0;
+    const totalTime = stream.time[stream.time.length - 1] || 0;
+    if (totalDist <= 0 || totalTime <= 0) {
+        return {
+            type: 'unclassified',
+            ...WORKOUT_META.unclassified,
+            confidence: 0,
+            signals: emptySignals,
+        };
+    }
+    const durationMin = totalTime / 60;
+    const avgPace = (totalTime / totalDist) * 1000;
+
+    // Average HR
+    let hrSum = 0;
+    let hrCount = 0;
+    if (stream.heartrate) {
+        for (const hr of stream.heartrate) {
+            if (hr != null) {
+                hrSum += hr;
+                hrCount++;
+            }
+        }
+    }
+    const avgHRPercent = hrCount > 0 ? (hrSum / hrCount / maxHR) * 100 : null;
+
+    // Pace variability: coefficient of variation over per-sample paces
+    const samplePaces: number[] = [];
+    for (let i = 0; i < stream.distance.length - 1; i++) {
+        const d = (stream.distance[i + 1] || 0) - (stream.distance[i] || 0);
+        const t = (stream.time[i + 1] || 0) - (stream.time[i] || 0);
+        if (d > 0.5 && t > 0) {
+            const p = (t / d) * 1000;
+            if (p > 60 && p < 1800) samplePaces.push(p);
+        }
+    }
+    let paceVariability: number | null = null;
+    if (samplePaces.length >= 4) {
+        const mean =
+            samplePaces.reduce((a, b) => a + b, 0) / samplePaces.length;
+        const variance =
+            samplePaces.reduce((s, p) => s + (p - mean) * (p - mean), 0) /
+            samplePaces.length;
+        const stdDev = Math.sqrt(variance);
+        paceVariability = mean > 0 ? (stdDev / mean) * 100 : null;
+    }
+
+    const signals = {
+        durationMin,
+        avgPaceSecPerKm: avgPace,
+        avgHRPercent,
+        paceVariability,
+    };
+
+    // Decision tree
+    if (durationMin < 25 && (avgHRPercent == null || avgHRPercent < 75)) {
+        return {
+            type: 'recovery',
+            ...WORKOUT_META.recovery,
+            confidence: 0.7,
+            signals,
+        };
+    }
+
+    if (paceVariability != null && paceVariability > 18 && durationMin < 75) {
+        // High pace variability in a moderate-length run → intervals/fartlek
+        return {
+            type: 'intervals',
+            ...WORKOUT_META.intervals,
+            confidence: 0.75,
+            signals,
+        };
+    }
+
+    if (avgHRPercent != null && avgHRPercent >= 92) {
+        // Sustained near-max effort
+        if (durationMin < 50) {
+            return {
+                type: 'race',
+                ...WORKOUT_META.race,
+                confidence: 0.7,
+                signals,
+            };
+        }
+        return {
+            type: 'threshold',
+            ...WORKOUT_META.threshold,
+            confidence: 0.65,
+            signals,
+        };
+    }
+
+    if (avgHRPercent != null && avgHRPercent >= 84) {
+        return {
+            type: 'tempo',
+            ...WORKOUT_META.tempo,
+            confidence: 0.7,
+            signals,
+        };
+    }
+
+    if (durationMin >= 90 && (avgHRPercent == null || avgHRPercent < 78)) {
+        return {
+            type: 'long',
+            ...WORKOUT_META.long,
+            confidence: 0.7,
+            signals,
+        };
+    }
+
+    if (avgHRPercent != null && avgHRPercent >= 78 && durationMin < 60) {
+        return {
+            type: 'tempo',
+            ...WORKOUT_META.tempo,
+            confidence: 0.55,
+            signals,
+        };
+    }
+
+    if (avgHRPercent != null && avgHRPercent < 78) {
+        return {
+            type: 'easy',
+            ...WORKOUT_META.easy,
+            confidence: 0.6,
+            signals,
+        };
+    }
+
+    return {
+        type: 'unclassified',
+        ...WORKOUT_META.unclassified,
+        confidence: 0.2,
+        signals,
+    };
+}
+
