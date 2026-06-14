@@ -857,6 +857,195 @@ export function calculateHRZoneDistribution(
     return result;
 }
 
+// ============== CARDIAC DRIFT ==============
+
+/**
+ * Cardiac drift / Aerobic Decoupling analysis.
+ *
+ * Splits the activity into two equal halves by distance, then compares the
+ * Efficiency Factor (EF = speed / avg HR) between halves.
+ *
+ *   Aerobic Decoupling % = ((EF_first - EF_second) / EF_first) × 100
+ *
+ * - Decoupling < 5%  → excellent aerobic base, stable cardiovascular efficiency
+ * - 5–10%            → good (typical for moderate efforts)
+ * - 10–15%           → fair (room to grow aerobic base)
+ * - > 15%            → poor (cardiac drift suggests aerobic deficit or fatigue)
+ *
+ * Requires a stream of at least `minDistanceKm` to be meaningful — short
+ * intervals skew the comparison because the warm-up dominates the first half.
+ */
+export type CardiacDriftStatus = 'excellent' | 'good' | 'fair' | 'poor' | 'na';
+
+export interface CardiacDriftHalf {
+    distanceKm: number;
+    durationSec: number;
+    durationFormatted: string;
+    avgPace: number; // sec/km
+    paceFormatted: string;
+    avgHR: number; // bpm
+    efficiencyFactor: number; // speed (m/s) / avg HR
+}
+
+export interface CardiacDriftData {
+    available: boolean;
+    reason?: string; // populated when available=false
+    firstHalf: CardiacDriftHalf | null;
+    secondHalf: CardiacDriftHalf | null;
+    decoupling: number; // percentage (positive = drift, negative = improving)
+    status: CardiacDriftStatus;
+    label: string;
+    message: string;
+}
+
+export function calculateCardiacDrift(
+    stream: ActivityStream,
+    maxHR: number = 180,
+    minDistanceKm: number = 2,
+): CardiacDriftData {
+    const empty: CardiacDriftData = {
+        available: false,
+        firstHalf: null,
+        secondHalf: null,
+        decoupling: 0,
+        status: 'na',
+        label: 'N/A',
+        message: '',
+    };
+
+    if (!stream.heartrate || stream.heartrate.length === 0) {
+        return {
+            ...empty,
+            reason: 'No heart rate data in this activity.',
+        };
+    }
+    if (!stream.distance || stream.distance.length === 0) {
+        return { ...empty, reason: 'No distance data in this activity.' };
+    }
+
+    const totalDistance = stream.distance[stream.distance.length - 1] || 0;
+    if (totalDistance < minDistanceKm * 1000) {
+        return {
+            ...empty,
+            reason: `Activity is shorter than ${minDistanceKm} km — drift analysis not meaningful.`,
+        };
+    }
+
+    // Find the index closest to the distance midpoint
+    const midpoint = totalDistance / 2;
+    let midIdx = stream.distance.length - 1;
+    for (let i = 0; i < stream.distance.length; i++) {
+        if (stream.distance[i] >= midpoint) {
+            midIdx = i;
+            break;
+        }
+    }
+
+    const computeHalf = (
+        start: number,
+        end: number,
+    ): CardiacDriftHalf | null => {
+        if (end <= start) return null;
+        const distMeters =
+            (stream.distance[end] || 0) - (stream.distance[start] || 0);
+        const durationSec =
+            (stream.time[end] || 0) - (stream.time[start] || 0);
+        const hrValues = stream.heartrate
+            .slice(start, end + 1)
+            .filter((hr): hr is number => hr !== null && hr > 0);
+
+        if (hrValues.length === 0 || distMeters <= 0 || durationSec <= 0) {
+            return null;
+        }
+
+        const avgHR = hrValues.reduce((a, b) => a + b, 0) / hrValues.length;
+        const speed = distMeters / durationSec; // m/s
+        const efficiencyFactor = speed / avgHR;
+        const avgPace = calculatePace(distMeters, durationSec);
+
+        return {
+            distanceKm: metersToKm(distMeters),
+            durationSec,
+            durationFormatted: secondsToTimeString(durationSec),
+            avgPace,
+            paceFormatted: formatPace(avgPace),
+            avgHR: Math.round(avgHR),
+            efficiencyFactor,
+        };
+    };
+
+    const firstHalf = computeHalf(0, midIdx);
+    const secondHalf = computeHalf(midIdx, stream.distance.length - 1);
+
+    if (!firstHalf || !secondHalf || firstHalf.efficiencyFactor === 0) {
+        return {
+            ...empty,
+            reason: 'Not enough HR samples in one of the halves.',
+        };
+    }
+
+    const decoupling =
+        ((firstHalf.efficiencyFactor - secondHalf.efficiencyFactor) /
+            firstHalf.efficiencyFactor) *
+        100;
+
+    let status: CardiacDriftStatus;
+    let label: string;
+    let message: string;
+
+    if (decoupling < 0) {
+        status = 'excellent';
+        label = 'Improving';
+        message =
+            'Efficiency improved through the run — strong cardiovascular control.';
+    } else if (decoupling < 5) {
+        status = 'excellent';
+        label = 'Excellent';
+        message = 'Cardiac drift is minimal. Strong aerobic base.';
+    } else if (decoupling < 10) {
+        status = 'good';
+        label = 'Good';
+        message = 'Mild drift — typical for steady aerobic efforts.';
+    } else if (decoupling < 15) {
+        status = 'fair';
+        label = 'Fair';
+        message = 'Noticeable drift. More aerobic volume will help.';
+    } else {
+        status = 'poor';
+        label = 'Needs Work';
+        message =
+            'High drift — aerobic base still developing, or fatigue was a factor.';
+    }
+
+    return {
+        available: true,
+        firstHalf,
+        secondHalf,
+        decoupling,
+        status,
+        label,
+        message,
+    };
+}
+
+/**
+ * Color for cardiac drift status (Tailwind-friendly hex).
+ */
+export function getDriftColor(status: CardiacDriftStatus): string {
+    switch (status) {
+        case 'excellent':
+            return '#10b981'; // emerald-500
+        case 'good':
+            return '#3b82f6'; // blue-500
+        case 'fair':
+            return '#f59e0b'; // amber-500
+        case 'poor':
+            return '#ef4444'; // red-500
+        default:
+            return '#6b7280'; // gray-500
+    }
+}
+
 // ============== FORMATTING ==============
 
 /**
