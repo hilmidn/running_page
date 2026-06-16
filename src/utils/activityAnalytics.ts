@@ -3501,3 +3501,268 @@ export function computeHRZoneTrend(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
 }
+
+// ============== PACE TREND ==============
+
+export interface PaceTrendPoint {
+    weekStart: string;
+    weekEnd: string;
+    weekLabel: string;
+    /** Distance-weighted average pace (sec/km) for the week */
+    avgPaceSecKm: number;
+    /** Median pace (sec/km) */
+    medianPaceSecKm: number;
+    /** Fastest run pace (sec/km) */
+    bestPaceSecKm: number;
+    totalDistanceKm: number;
+    runCount: number;
+    totalDurationSec: number;
+}
+
+/**
+ * Bucket activities into ISO weeks (matching computeWeeklyVolume) and
+ * compute distance-weighted average pace per week. Only running-type
+ * activities are included. Returns data for the last `weeksBack` weeks,
+ * sorted ascending — weeks with no runs return null paces.
+ */
+export function computePaceTrend(
+    activities: Activity[],
+    weeksBack: number = 12,
+    now: Date = new Date(),
+): PaceTrendPoint[] {
+    const today = new Date(now);
+    const dow = today.getDay();
+    const isoDayOfWeek = dow === 0 ? 7 : dow;
+    const currentMonday = new Date(today);
+    currentMonday.setHours(0, 0, 0, 0);
+    currentMonday.setDate(today.getDate() - (isoDayOfWeek - 1));
+
+    const buckets: Record<string, {
+        paces: number[];
+        dist: number[];
+        runCount: number;
+        durationSec: number;
+        weekStart: string;
+        weekEnd: string;
+        weekLabel: string;
+    }> = {};
+
+    for (let i = weeksBack - 1; i >= 0; i--) {
+        const ws = new Date(currentMonday);
+        ws.setDate(currentMonday.getDate() - i * 7);
+        const we = new Date(ws);
+        we.setDate(ws.getDate() + 6);
+        const key = ws.toISOString().slice(0, 10);
+        buckets[key] = {
+            weekStart: key,
+            weekEnd: we.toISOString().slice(0, 10),
+            weekLabel: formatWeekRange(ws, we),
+            paces: [],
+            dist: [],
+            runCount: 0,
+            durationSec: 0,
+        };
+    }
+
+    const earliest = Object.keys(buckets)[0];
+    const runs = activities.filter(
+        (a) => a.type === 'Run' || a.type === 'running',
+    );
+
+    for (const a of runs) {
+        if (!a.distance || a.distance < 200) continue;
+        if (!a.average_speed || a.average_speed <= 0) continue;
+        const d = new Date(a.start_date_local);
+        if (isNaN(d.getTime())) continue;
+        const runDow = d.getDay();
+        const runIso = runDow === 0 ? 7 : runDow;
+        const runMonday = new Date(d);
+        runMonday.setHours(0, 0, 0, 0);
+        runMonday.setDate(d.getDate() - (runIso - 1));
+        const key = runMonday.toISOString().slice(0, 10);
+        if (key < earliest) continue;
+        const bucket = buckets[key];
+        if (!bucket) continue;
+
+        const paceSecKm = a.average_speed > 0 ? 1000 / a.average_speed : 0;
+        if (paceSecKm <= 0) continue;
+        bucket.paces.push(paceSecKm);
+        bucket.dist.push(a.distance);
+        bucket.runCount += 1;
+        bucket.durationSec += parseMovingTime(a.moving_time);
+    }
+
+    return Object.keys(buckets)
+        .sort()
+        .map((k) => {
+            const b = buckets[k];
+            let avgPace = 0;
+            let medianPace = 0;
+            let bestPace = 0;
+            let totalDist = 0;
+
+            if (b.runCount > 0) {
+                const weightedSum = b.paces.reduce(
+                    (s, p, i) => s + p * (b.dist[i] / 1000),
+                    0,
+                );
+                totalDist = b.dist.reduce((s, d) => s + d / 1000, 0);
+                avgPace = totalDist > 0 ? weightedSum / totalDist : 0;
+
+                const sorted = [...b.paces].sort((a, b) => a - b);
+                medianPace = sorted[Math.floor(sorted.length / 2)];
+                bestPace = sorted[0];
+            }
+
+            return {
+                weekStart: b.weekStart,
+                weekEnd: b.weekEnd,
+                weekLabel: b.weekLabel,
+                avgPaceSecKm: avgPace,
+                medianPaceSecKm: medianPace,
+                bestPaceSecKm: bestPace,
+                totalDistanceKm: totalDist,
+                runCount: b.runCount,
+                totalDurationSec: b.durationSec,
+            };
+        });
+}
+
+// ============== TRAINING BALANCE (Z2 vs Z3+) ==============
+
+export interface TrainingBalancePoint {
+    weekStart: string;
+    weekEnd: string;
+    weekLabel: string;
+    z2Minutes: number;
+    z3PlusMinutes: number;
+    z2Percent: number;
+    z2Km: number;
+    z3PlusKm: number;
+    totalMinutes: number;
+    totalKm: number;
+    runCount: number;
+}
+
+/**
+ * Bucket activities into ISO weeks and compute per-week Z2 vs Z3+ time
+ * distribution using HR stream data. Z2 = 60-76% of maxHR (MAF zone).
+ * Needs streamMap — activities without HR streams are skipped.
+ */
+export function computeTrainingBalance(
+    activities: Activity[],
+    streamMap: Map<number, ActivityStream | null>,
+    maxHR: number = 180,
+    weeksBack: number = 12,
+    now: Date = new Date(),
+): TrainingBalancePoint[] {
+    const today = new Date(now);
+    const dow = today.getDay();
+    const isoDayOfWeek = dow === 0 ? 7 : dow;
+    const currentMonday = new Date(today);
+    currentMonday.setHours(0, 0, 0, 0);
+    currentMonday.setDate(today.getDate() - (isoDayOfWeek - 1));
+
+    const buckets: Record<string, {
+        z2Sec: number;
+        z3plusSec: number;
+        z2Dist: number;
+        z3plusDist: number;
+        runCount: number;
+        totalDist: number;
+        weekStart: string;
+        weekEnd: string;
+        weekLabel: string;
+    }> = {};
+
+    for (let i = weeksBack - 1; i >= 0; i--) {
+        const ws = new Date(currentMonday);
+        ws.setDate(currentMonday.getDate() - i * 7);
+        const we = new Date(ws);
+        we.setDate(ws.getDate() + 6);
+        const key = ws.toISOString().slice(0, 10);
+        buckets[key] = {
+            weekStart: key,
+            weekEnd: we.toISOString().slice(0, 10),
+            weekLabel: formatWeekRange(ws, we),
+            z2Sec: 0,
+            z3plusSec: 0,
+            z2Dist: 0,
+            z3plusDist: 0,
+            runCount: 0,
+            totalDist: 0,
+        };
+    }
+
+    const earliest = Object.keys(buckets)[0];
+    const runs = activities.filter(
+        (a) => a.type === 'Run' || a.type === 'running',
+    );
+
+    for (const a of runs) {
+        if (!a.distance || a.distance < 200) continue;
+        const d = new Date(a.start_date_local);
+        if (isNaN(d.getTime())) continue;
+        const runDow = d.getDay();
+        const runIso = runDow === 0 ? 7 : runDow;
+        const runMonday = new Date(d);
+        runMonday.setHours(0, 0, 0, 0);
+        runMonday.setDate(d.getDate() - (runIso - 1));
+        const key = runMonday.toISOString().slice(0, 10);
+        if (key < earliest) continue;
+        const bucket = buckets[key];
+        if (!bucket) continue;
+
+        const stream = streamMap.get(a.run_id);
+        if (!stream || !stream.heartrate || stream.heartrate.length === 0) {
+            continue;
+        }
+
+        let z2Count = 0;
+        let z3plusCount = 0;
+        for (const hr of stream.heartrate) {
+            if (hr == null || hr <= 0) continue;
+            const pct = (hr / maxHR) * 100;
+            if (pct >= 60 && pct < 76) {
+                z2Count += 1;
+            } else if (pct >= 76) {
+                z3plusCount += 1;
+            }
+        }
+
+        const totalSamples = z2Count + z3plusCount;
+        if (totalSamples === 0) continue;
+
+        const z2Ratio = z2Count / totalSamples;
+        const distKm = a.distance / 1000;
+
+        bucket.z2Sec += z2Count;
+        bucket.z3plusSec += z3plusCount;
+        bucket.z2Dist += distKm * z2Ratio;
+        bucket.z3plusDist += distKm * (1 - z2Ratio);
+        bucket.runCount += 1;
+        bucket.totalDist += distKm;
+    }
+
+    return Object.keys(buckets)
+        .sort()
+        .map((k) => {
+            const b = buckets[k];
+            const totalMin = (b.z2Sec + b.z3plusSec) / 60;
+            return {
+                weekStart: b.weekStart,
+                weekEnd: b.weekEnd,
+                weekLabel: b.weekLabel,
+                z2Minutes: Math.round(b.z2Sec / 60),
+                z3PlusMinutes: Math.round(b.z3plusSec / 60),
+                z2Percent: totalMin > 0
+                    ? (b.z2Sec / (b.z2Sec + b.z3plusSec)) * 100
+                    : 0,
+                z2Km: Math.round(b.z2Dist * 100) / 100,
+                z3PlusKm: Math.round(b.z3plusDist * 100) / 100,
+                totalMinutes: Math.round(totalMin),
+                totalKm: Math.round(b.totalDist * 100) / 100,
+                runCount: b.runCount,
+            };
+        });
+}

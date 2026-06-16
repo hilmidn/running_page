@@ -5,6 +5,8 @@ import { useTheme } from '@/hooks/useTheme';
 import useActivities from '@/hooks/useActivities';
 import useSiteMetadata from '@/hooks/useSiteMetadata';
 import VolumeProgression from '@/components/Trends/VolumeProgression';
+import PaceTrend from '@/components/Trends/PaceTrend';
+import TrainingBalance from '@/components/Trends/TrainingBalance';
 import VO2maxTrend from '@/components/Trends/VO2maxTrend';
 import HRZoneTrend from '@/components/Trends/HRZoneTrend';
 import type { ActivityStream } from '@/utils/activityAnalytics';
@@ -181,13 +183,31 @@ const TrendsPage = () => {
             />
           )}
 
-          {/* VO2max + HR zones need streams */}
+          {/* Pace trend — also uses activity summary only */}
+          {runActivities.length > 0 && (
+            <PaceTrend
+              activities={runActivities}
+              weeksBack={weeksBack}
+              targetPaceSecKm={
+                maxHR > 0 ? Math.round((60 / (0.76 * maxHR)) * 60 * 60) : undefined
+              }
+            />
+          )}
+
+          {/* VO2max + HR zones + training balance need streams */}
           {!streamsLoading && runActivities.length > 0 && (
             <>
               <VO2maxTrend
                 activities={runActivities}
                 streamMap={streamMap}
                 weeksBack={weeksBack}
+              />
+              <TrainingBalance
+                activities={runActivities}
+                streamMap={streamMap}
+                maxHR={maxHR}
+                weeksBack={weeksBack}
+                targetZ2Percent={70}
               />
               <HRZoneTrend
                 activities={runActivities}
