@@ -7,6 +7,9 @@ import useSiteMetadata from '@/hooks/useSiteMetadata';
 import VolumeProgression from '@/components/Trends/VolumeProgression';
 import PaceTrend from '@/components/Trends/PaceTrend';
 import TrainingBalance from '@/components/Trends/TrainingBalance';
+import RaceTimePredictor from '@/components/Trends/RaceTimePredictor';
+import DecouplingTrend from '@/components/Trends/DecouplingTrend';
+import TrainingLoad from '@/components/Trends/TrainingLoad';
 import VO2maxTrend from '@/components/Trends/VO2maxTrend';
 import HRZoneTrend from '@/components/Trends/HRZoneTrend';
 import type { ActivityStream } from '@/utils/activityAnalytics';
@@ -194,9 +197,27 @@ const TrendsPage = () => {
             />
           )}
 
-          {/* VO2max + HR zones + training balance need streams */}
+          {/* Race day analytics + training load + decoupling + advanced need streams */}
           {!streamsLoading && runActivities.length > 0 && (
             <>
+              <RaceTimePredictor
+                activities={runActivities}
+                streamMap={streamMap}
+                weeksBack={26}
+                focusLabel="Half Marathon"
+              />
+              <TrainingLoad
+                activities={runActivities}
+                streamMap={streamMap}
+                maxHR={maxHR}
+                weeksBack={weeksBack}
+              />
+              <DecouplingTrend
+                activities={runActivities}
+                streamMap={streamMap}
+                weeksBack={weeksBack}
+                minDurationMin={30}
+              />
               <VO2maxTrend
                 activities={runActivities}
                 streamMap={streamMap}

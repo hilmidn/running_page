@@ -3766,3 +3766,319 @@ export function computeTrainingBalance(
             };
         });
 }
+
+// (Race time prediction is provided by the existing `findPersonalBests` + 
+//  `predictRaceTimes` functions earlier in this file. They use sliding-window
+//  analysis on streams, which is more accurate than per-run average pace.)
+
+
+// ============== CARDIAC DECOUPLING (MAF progress) ==============
+
+export interface DecouplingPoint {
+    date: string;
+    runId: number;
+    name: string;
+    durationMin: number;
+    distanceKm: number;
+    /** Average HR first half (bpm) */
+    hrFirst: number;
+    /** Average HR second half (bpm) */
+    hrSecond: number;
+    /** Average pace first half (sec/km) — lower is faster */
+    paceFirst: number;
+    /** Average pace second half (sec/km) */
+    paceSecond: number;
+    /** Decoupling %: positive = HR drifted up / pace slowed (aerobic inefficiency).
+     *  Negative or small values = good MAF progress. */
+    decouplingPct: number;
+    /** Efficiency ratio first half (pace / HR, lower = better) */
+    efficiencyFirst: number;
+    efficiencySecond: number;
+    /** "good" = decoupling < 5% AND was a long run */
+    quality: 'good' | 'drift' | 'short';
+}
+
+/**
+ * Compute cardiac decoupling for long-ish runs (>= 30 min) using HR stream.
+ *
+ * Decoupling = 1 - (pace2 * hr1) / (pace1 * hr2)
+ *   - pace1, hr1 = avg of first half
+ *   - pace2, hr2 = avg of second half
+ * Positive value = aerobic drift (HR went up, pace slowed) — early MAF base.
+ * Small/negative value = efficient aerobic system — what MAF training aims for.
+ */
+export function computeDecouplingTrend(
+    activities: Activity[],
+    streamMap: Map<number, ActivityStream | null>,
+    weeksBack: number = 12,
+    now: Date = new Date(),
+    minDurationMin: number = 30,
+): DecouplingPoint[] {
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - weeksBack * 7);
+    const cutoffMs = cutoff.getTime();
+
+    const runs = activities
+        .filter((a) => a.type === 'Run' || a.type === 'running')
+        .filter((a) => a.distance && a.distance >= 2000)
+        .filter((a) => new Date(a.start_date_local).getTime() >= cutoffMs)
+        .sort(
+            (a, b) =>
+                new Date(a.start_date_local).getTime() -
+                new Date(b.start_date_local).getTime(),
+        );
+
+    const out: DecouplingPoint[] = [];
+
+    for (const a of runs) {
+        const movingSec = parseMovingTime(a.moving_time);
+        if (movingSec / 60 < minDurationMin) continue;
+        const stream = streamMap.get(a.run_id);
+        if (!stream || !stream.heartrate || stream.heartrate.length === 0) {
+            continue;
+        }
+        if (!stream.distance || stream.distance.length === 0) continue;
+
+        const n = Math.min(
+            stream.heartrate.length,
+            stream.distance.length,
+            stream.time?.length || Infinity,
+        );
+        if (n < 60) continue;
+
+        // Build per-sample pace (sec/km) and pair with HR
+        // pace = delta_time / delta_distance (m)
+        const half = Math.floor(n / 2);
+
+        // Sum both HR and pace in one pass
+        const sumBoth = (
+            start: number,
+            end: number,
+        ): { hrSum: number; paceSum: number; count: number } => {
+            let hrSum = 0;
+            let paceSum = 0;
+            let count = 0;
+            for (let i = start; i < end; i++) {
+                const hr = stream.heartrate[i];
+                if (hr == null || hr <= 0) continue;
+                const dist = stream.distance[i];
+                const distPrev = i > 0 ? stream.distance[i - 1] : 0;
+                const t = stream.time?.[i];
+                const tPrev = i > 0 ? stream.time?.[i - 1] : 0;
+                if (
+                    dist == null ||
+                    t == null ||
+                    tPrev == null ||
+                    distPrev == null
+                )
+                    continue;
+                const dDelta = dist - distPrev;
+                const tDelta = t - tPrev;
+                if (dDelta <= 0 || tDelta <= 0) continue;
+                const paceSecKm = (tDelta / dDelta) * 1000;
+                if (!isFinite(paceSecKm) || paceSecKm <= 0) continue;
+                hrSum += hr;
+                paceSum += paceSecKm;
+                count += 1;
+            }
+            return { hrSum, paceSum, count };
+        };
+
+        const first = sumBoth(0, half);
+        const second = sumBoth(half, n);
+        if (first.count < 10 || second.count < 10) continue;
+
+        const hrFirst = first.hrSum / first.count;
+        const hrSecond = second.hrSum / second.count;
+        const paceFirst = first.paceSum / first.count;
+        const paceSecond = second.paceSum / second.count;
+
+        // decoupling = 1 - (pace2/pace1) / (hr2/hr1)
+        //              = 1 - (pace2 * hr1) / (pace1 * hr2)
+        const decoupling =
+            1 - (paceSecond * hrFirst) / (paceFirst * hrSecond);
+        const decouplingPct = decoupling * 100;
+
+        const quality: DecouplingPoint['quality'] =
+            movingSec / 60 < minDurationMin
+                ? 'short'
+                : decouplingPct < 5
+                  ? 'good'
+                  : 'drift';
+
+        out.push({
+            date: a.start_date_local,
+            runId: a.run_id,
+            name: a.name,
+            durationMin: movingSec / 60,
+            distanceKm: a.distance / 1000,
+            hrFirst: Math.round(hrFirst * 10) / 10,
+            hrSecond: Math.round(hrSecond * 10) / 10,
+            paceFirst: Math.round(paceFirst),
+            paceSecond: Math.round(paceSecond),
+            decouplingPct: Math.round(decouplingPct * 10) / 10,
+            efficiencyFirst: Math.round((paceFirst / hrFirst) * 100) / 100,
+            efficiencySecond:
+                Math.round((paceSecond / hrSecond) * 100) / 100,
+            quality,
+        });
+    }
+
+    return out;
+}
+
+// ============== TRAINING LOAD (CTL / ATL / TSB) ==============
+
+export interface DailyLoadPoint {
+    date: string;
+    tss: number;
+    ctl: number;
+    atl: number;
+    tsb: number;
+    /** km ran that day */
+    distanceKm: number;
+    /** minutes ran that day */
+    durationMin: number;
+}
+
+export interface TrainingLoadResult {
+    daily: DailyLoadPoint[];
+    /** Latest CTL (chronic training load / fitness), in TSS units */
+    currentCTL: number;
+    currentATL: number;
+    currentTSB: number;
+    /** 7-day TSS sum */
+    tss7Day: number;
+    /** 28-day TSS sum */
+    tss28Day: number;
+}
+
+/**
+ * Compute rTSS (running Training Stress Score) per day, then exponentially
+ * weighted moving averages for CTL (42-day) and ATL (7-day), and TSB = CTL - ATL.
+ *
+ * rTSS ≈ (durationSec × (HR/THR)^2) / 3600 × 100
+ *   where THR ≈ 88% of maxHR (anaerobic threshold proxy)
+ *
+ * For runs without HR stream, fall back to a pace-intensity factor based
+ * on the run's distance-weighted pace vs a conservative "easy" threshold.
+ */
+export function computeTrainingLoad(
+    activities: Activity[],
+    streamMap: Map<number, ActivityStream | null>,
+    maxHR: number = 180,
+    weeksBack: number = 16,
+    now: Date = new Date(),
+): TrainingLoadResult {
+    const thr = Math.round(maxHR * 0.88);
+    const days = weeksBack * 7;
+
+    // Build empty daily map for `days` back from `now`
+    const daily: Record<
+        string,
+        { tss: number; distanceKm: number; durationMin: number }
+    > = {};
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() - i);
+        daily[d.toISOString().slice(0, 10)] = {
+            tss: 0,
+            distanceKm: 0,
+            durationMin: 0,
+        };
+    }
+
+    const runs = activities.filter(
+        (a) => a.type === 'Run' || a.type === 'running',
+    );
+
+    for (const a of runs) {
+        if (!a.distance || a.distance < 500) continue;
+        const d = new Date(a.start_date_local);
+        if (isNaN(d.getTime())) continue;
+        d.setHours(0, 0, 0, 0);
+        const key = d.toISOString().slice(0, 10);
+        if (!daily[key]) continue;
+
+        const movingSec = parseMovingTime(a.moving_time);
+        if (movingSec <= 0) continue;
+        const distanceKm = a.distance / 1000;
+        const durationHr = movingSec / 3600;
+
+        let tss = 0;
+        // Prefer HR-stream based rTSS
+        const stream = streamMap.get(a.run_id);
+        if (
+            stream &&
+            stream.heartrate &&
+            stream.heartrate.length > 0 &&
+            thr > 0
+        ) {
+            let hrSum = 0;
+            let hrCount = 0;
+            for (const hr of stream.heartrate) {
+                if (hr != null && hr > 0) {
+                    hrSum += hr;
+                    hrCount += 1;
+                }
+            }
+            if (hrCount > 0) {
+                const avgHR = hrSum / hrCount;
+                const intensity = avgHR / thr;
+                tss = (durationHr * intensity * intensity) * 100;
+            }
+        }
+
+        // Fallback: pace-based proxy. Use 6:00/km = ~1.0 intensity
+        if (tss === 0) {
+            const paceSecKm = distanceKm > 0 ? movingSec / distanceKm : 0;
+            // 6:00/km => intensity 1.0; faster => higher
+            const intensity = 360 / paceSecKm;
+            tss = (durationHr * intensity * intensity) * 100;
+        }
+
+        if (!isFinite(tss) || tss < 0) tss = 0;
+
+        daily[key].tss += tss;
+        daily[key].distanceKm += distanceKm;
+        daily[key].durationMin += movingSec / 60;
+    }
+
+    // Compute CTL/ATL/TSB chronologically using EWMA
+    const dates = Object.keys(daily).sort();
+    const out: DailyLoadPoint[] = [];
+    let ctl = 0;
+    let atl = 0;
+    for (const date of dates) {
+        const tssToday = daily[date].tss;
+        ctl = tssToday + ctl * Math.exp(-1 / 42);
+        atl = tssToday + atl * Math.exp(-1 / 7);
+        out.push({
+            date,
+            tss: Math.round(tssToday * 10) / 10,
+            ctl: Math.round(ctl * 10) / 10,
+            atl: Math.round(atl * 10) / 10,
+            tsb: Math.round((ctl - atl) * 10) / 10,
+            distanceKm: Math.round(daily[date].distanceKm * 10) / 10,
+            durationMin: Math.round(daily[date].durationMin),
+        });
+    }
+
+    const last = out[out.length - 1];
+    const sum7 = out
+        .slice(-7)
+        .reduce((s, p) => s + p.tss, 0);
+    const sum28 = out
+        .slice(-28)
+        .reduce((s, p) => s + p.tss, 0);
+
+    return {
+        daily: out,
+        currentCTL: last?.ctl ?? 0,
+        currentATL: last?.atl ?? 0,
+        currentTSB: last?.tsb ?? 0,
+        tss7Day: Math.round(sum7 * 10) / 10,
+        tss28Day: Math.round(sum28 * 10) / 10,
+    };
+}
